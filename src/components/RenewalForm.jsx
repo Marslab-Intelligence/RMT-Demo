@@ -246,26 +246,26 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
 
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-surface-200 dark:border-surface-700 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 dark:bg-[#080611]/80 backdrop-blur-md animate-fade-in">
+      <div className="modal-glass w-full max-w-2xl overflow-hidden rounded-2xl flex flex-col max-h-[90vh]">
         
-        <div className="px-6 py-4 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center bg-surface-50 dark:bg-surface-900/50">
+        <div className="modal-header-glass px-6 py-4 flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-surface-900 dark:text-white">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
               {editData ? 'Edit Renewal Record' : 'Add New Renewal'}
             </h2>
             {(!editData && !isAdmin) && (
-              <p className="text-xs text-surface-500 mt-1 flex items-center gap-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                 <Lock className="w-3 h-3 text-amber-500" /> Record will be locked upon creation
               </p>
             )}
           </div>
-          <button onClick={onClose} className="p-2 text-surface-400 hover:text-surface-600 rounded-full hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
           <form id="renewal-form" onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -300,21 +300,21 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                 />
 
                 {SUB_SERVICES[selectedMainService] && (
-                  <div className="mt-2.5 p-3 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 space-y-2">
-                    <p className="text-[10px] font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-1">
+                  <div className="mt-2.5 p-3 rounded-xl border border-slate-200/80 dark:border-white/10 bg-slate-50/70 dark:bg-white/[0.04] space-y-2">
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                       Select Sub-Services:
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {SUB_SERVICES[selectedMainService].map(sub => (
                         <label 
                           key={sub} 
-                          className="flex items-center gap-2 text-xs font-semibold text-surface-700 dark:text-surface-300 cursor-pointer hover:text-surface-900 dark:hover:text-white"
+                          className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:hover:text-white"
                         >
                           <input 
                             type="checkbox" 
                             checked={selectedSubServices.includes(sub)}
                             onChange={() => handleSubServiceToggle(sub)}
-                            className="rounded border-surface-300 dark:border-surface-750 text-brand-650 focus:ring-brand-500 dark:bg-surface-800"
+                            className="rounded border-slate-300 dark:border-white/20 text-brand-600 focus:ring-brand-500/40 dark:bg-white/10"
                           />
                           <span>{sub}</span>
                         </label>
@@ -426,8 +426,8 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                 </div>
               )}
 
-              <div className="md:col-span-2 border-t border-surface-200 dark:border-surface-700 pt-5 mt-2">
-                <h3 className="text-sm font-bold text-surface-900 dark:text-white uppercase tracking-wider">
+              <div className="md:col-span-2 border-t border-slate-200/80 dark:border-white/10 pt-5 mt-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                   Product & Financial Details
                 </h3>
               </div>
@@ -518,7 +518,7 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                   readOnly
                   disabled
                   value={formData.total_purchase_cost} 
-                  className="input-field bg-surface-50 dark:bg-surface-800 text-surface-500 cursor-not-allowed" 
+                  className="input-field bg-black/[0.03] dark:bg-black/30 dark:border-white/5 text-slate-500 dark:text-slate-400 cursor-not-allowed" 
                 />
               </div>
 
@@ -543,7 +543,7 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                   readOnly
                   disabled
                   value={formData.total_sales_cost} 
-                  className="input-field bg-surface-50 dark:bg-surface-800 text-surface-500 cursor-not-allowed" 
+                  className="input-field bg-black/[0.03] dark:bg-black/30 dark:border-white/5 text-slate-500 dark:text-slate-400 cursor-not-allowed" 
                 />
               </div>
 
@@ -555,14 +555,14 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                   readOnly
                   disabled
                   value={formData.profit} 
-                  className={`input-field bg-surface-50 dark:bg-surface-800 cursor-not-allowed font-semibold ${formData.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} 
+                  className={`input-field bg-black/[0.03] dark:bg-black/30 dark:border-white/5 cursor-not-allowed font-semibold ${formData.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} 
                 />
               </div>
             </div>
 
             {formData.status === 'Expired' && (
               <div>
-                <label className="label">Expiry Reason <span className="text-red-500">*</span></label>
+                <label className="label">Expiry Reason <span className="text-rose-500">*</span></label>
                 <textarea 
                   required
                   rows="2"
@@ -577,7 +577,7 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
             
             {editData && (
               <div>
-                <label className="label">Reason for Update <span className="text-red-500">*</span></label>
+                <label className="label">Reason for Update <span className="text-rose-500">*</span></label>
                 <textarea 
                   required
                   rows="2"
@@ -590,9 +590,9 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
             )}
 
             {!isAdmin && (
-              <div className="bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800 p-4 rounded-lg mt-6">
-                <h4 className="text-sm font-semibold text-brand-800 dark:text-brand-300 mb-1">Note</h4>
-                <p className="text-xs text-brand-600 dark:text-brand-400">
+              <div className="bg-brand-500/10 dark:bg-purple-950/25 border border-brand-500/20 dark:border-purple-500/30 p-4 rounded-xl mt-6">
+                <h4 className="text-sm font-semibold text-brand-800 dark:text-purple-300 mb-1">Note</h4>
+                <p className="text-xs text-brand-600 dark:text-purple-200/80">
                   Once saved, this data cannot be edited directly to ensure data integrity. The system will automatically calculate dates and schedule reminder emails based on the Renewal Date provided.
                 </p>
               </div>
@@ -602,18 +602,18 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                 type="checkbox" 
                 id="acknowledgement" 
                 required 
-                className="w-4 h-4 rounded text-brand-600 border-surface-300 focus:ring-brand-500 dark:border-surface-700 cursor-pointer"
+                className="w-4 h-4 rounded text-purple-600 dark:text-purple-500 border-slate-300 dark:border-white/20 focus:ring-purple-500/40 dark:bg-white/10 cursor-pointer"
                 checked={acknowledged}
                 onChange={(e) => setAcknowledged(e.target.checked)}
               />
-              <label htmlFor="acknowledgement" className="text-xs text-surface-600 dark:text-surface-300 font-medium select-none cursor-pointer flex items-center">
-                I acknowledge that the information provided above is correct and verified. <span className="text-red-500">*</span>
+              <label htmlFor="acknowledgement" className="text-xs text-slate-600 dark:text-slate-300 font-medium select-none cursor-pointer flex items-center">
+                I acknowledge that the information provided above is correct and verified. <span className="text-rose-500 ml-1">*</span>
               </label>
             </div>
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/50 flex justify-end gap-3">
+        <div className="modal-footer-glass px-6 py-4 flex justify-end gap-3 flex-shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>

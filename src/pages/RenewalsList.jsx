@@ -6,7 +6,7 @@ import { formatCurrency, formatDate, getStatusColor, getDaysLeftColor } from '..
 import { 
   Plus, Search, Filter, Download, ChevronLeft, ChevronRight, 
   MoreVertical, Edit, Edit3, RotateCw, MailCheck, MailX, ShieldAlert, CheckCircle, Trash2, X, Upload, Calendar,
-  Columns, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Send, CheckSquare, Square, FileSpreadsheet, Eye, EyeOff, Check, Maximize2, Minimize2
+  Columns, SlidersHorizontal, ArrowUp, ArrowDown, Send, CheckSquare, Square, FileSpreadsheet, Eye, EyeOff, Check, Maximize2, Minimize2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import RenewalForm from '../components/RenewalForm';
@@ -780,18 +780,90 @@ export default function RenewalsList() {
     }
   };
 
-  // Sort computation
+  // Priority tier helper:
+  // Tier 0: Active / Pending renewals (nearest renewal dates / lowest days left on top)
+  // Tier 1: Renewed / Completed / Called data
+  // Tier 2: Expired renewals (past due, not cancelled)
+  // Tier 3: ALL Cancelled renewals (placed at the absolute bottom / down of the table)
+  const getRenewalSortTier = (r) => {
+    if (!r) return 0;
+    const status = (r.status || '').toLowerCase().trim();
+    const confirmation = (r.renewal_confirmation || '').toLowerCase().trim();
+    const followUp = (r.follow_up_status || '').toLowerCase().trim();
+    const editStatus = (r.edit_status || '').toLowerCase().trim();
+    const daysLeft = r.days_left;
+
+    // Tier 3 (Very bottom of table): All Cancelled, Lost, or Discontinued renewals
+    if (
+      status === 'cancelled' ||
+      confirmation === 'cancelled' ||
+      confirmation === 'lost' ||
+      confirmation === 'service_discontinued' ||
+      editStatus === 'cancelled'
+    ) {
+      return 3;
+    }
+
+    // Tier 2: Expired renewals (past due)
+    if (status === 'expired' || (daysLeft !== null && daysLeft !== undefined && daysLeft < 0)) {
+      return 2;
+    }
+
+    // Tier 1: Renewed / Completed / Called data
+    if (
+      status === 'renewed' ||
+      status === '-' ||
+      confirmation === 'renewed' ||
+      followUp === 'completed' ||
+      followUp.includes('called') ||
+      followUp.includes('completed')
+    ) {
+      return 1;
+    }
+
+    // Tier 0: Active / Pending renewals (top priority)
+    return 0;
+  };
+
+  // Sort computation: shows active renewals with nearest renewal dates (lowest days left) on top,
+  // followed by renewed/completed, then expired, and ALL cancelled renewals at the very bottom
   const sortedRenewals = React.useMemo(() => {
-    if (!sortCol) return renewals;
+    if (!renewals || renewals.length === 0) return [];
     return [...renewals].sort((a, b) => {
+      const tierA = getRenewalSortTier(a);
+      const tierB = getRenewalSortTier(b);
+
+      // Tier sorting: Tier 0 on top, Tier 3 (cancelled) at the very bottom
+      if (tierA !== tierB) {
+        return tierA - tierB;
+      }
+
+      // If sorting by renewal_date (or default), show nearest renewal dates (lowest days left) on top
+      if (!sortCol || sortCol === 'renewal_date') {
+        const timeA = a.renewal_date ? new Date(a.renewal_date).getTime() : Infinity;
+        const timeB = b.renewal_date ? new Date(b.renewal_date).getTime() : Infinity;
+        if (timeA !== timeB) {
+          return sortDir === 'desc' ? timeB - timeA : timeA - timeB;
+        }
+        return (a.unique_id || '').localeCompare(b.unique_id || '');
+      }
+
+      // Column-specific sorting within each tier
       let valA = a[sortCol];
       let valB = b[sortCol];
       if (valA === null || valA === undefined) valA = '';
       if (valB === null || valB === undefined) valB = '';
 
+      if (sortCol === 'value' || sortCol === 'invoice_value') {
+        const numA = parseFloat(valA) || 0;
+        const numB = parseFloat(valB) || 0;
+        return sortDir === 'asc' ? numA - numB : numB - numA;
+      }
+
       if (typeof valA === 'number' && typeof valB === 'number') {
         return sortDir === 'asc' ? valA - valB : valB - valA;
       }
+
       return sortDir === 'asc' 
         ? String(valA).localeCompare(String(valB)) 
         : String(valB).localeCompare(String(valA));
@@ -2083,7 +2155,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('unique_id')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Unique ID</span>
-                        {sortCol === 'unique_id' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'unique_id' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                     </div>
                     <div onMouseDown={(e) => handleResizeMouseDown('id', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-brand-500/80 z-30" />
@@ -2099,7 +2171,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('client_name')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Client Info</span>
-                        {sortCol === 'client_name' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'client_name' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <ClientFilterDropdown 
                         value={clientFilter} 
@@ -2126,7 +2198,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('service')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Service</span>
-                        {sortCol === 'service' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'service' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="service" 
@@ -2146,7 +2218,7 @@ export default function RenewalsList() {
                   </th>
                 )}
 
-                {/* Quotation No */}
+                {/* Quotation Number */}
                 {visibleCols.quotation && (
                   <th 
                     style={{ width: `${colWidths.quotation || 130}px`, minWidth: `${colWidths.quotation || 130}px` }} 
@@ -2155,7 +2227,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('quotation_number')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Quotation No.</span>
-                        {sortCol === 'quotation_number' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'quotation_number' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                     </div>
                     <div onMouseDown={(e) => handleResizeMouseDown('quotation', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-brand-500/80 z-30" />
@@ -2171,7 +2243,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('renewal_date')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Renewal Date</span>
-                        {sortCol === 'renewal_date' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'renewal_date' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="date" 
@@ -2200,7 +2272,7 @@ export default function RenewalsList() {
                     <div className="flex items-center gap-1 h-5">
                       <button onClick={() => handleSort('value')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Value</span>
-                        {sortCol === 'value' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'value' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="value" 
@@ -2229,7 +2301,7 @@ export default function RenewalsList() {
                     <div className="flex items-center justify-center gap-1 h-5">
                       <button onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Status</span>
-                        {sortCol === 'status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="status" 
@@ -2269,7 +2341,7 @@ export default function RenewalsList() {
                     <div className="flex items-center justify-center gap-1 h-5">
                       <button onClick={() => handleSort('renewal_confirmation')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Confirmation</span>
-                        {sortCol === 'renewal_confirmation' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'renewal_confirmation' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="renewed" 
@@ -2298,7 +2370,7 @@ export default function RenewalsList() {
                     <div className="flex items-center justify-center gap-1 h-5">
                       <button onClick={() => handleSort('invoice_status')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Invoice</span>
-                        {sortCol === 'invoice_status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'invoice_status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="invoice" 
@@ -2327,7 +2399,7 @@ export default function RenewalsList() {
                     <div className="flex items-center justify-center gap-1 h-5">
                       <button onClick={() => handleSort('payment_status')} className="flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400 font-semibold text-[11px] whitespace-nowrap">
                         <span>Payment</span>
-                        {sortCol === 'payment_status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+                        {sortCol === 'payment_status' ? (sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600" /> : <ArrowDown className="w-3 h-3 text-brand-600" />) : null}
                       </button>
                       <FilterDropdown 
                         col="payment" 
@@ -2566,7 +2638,7 @@ export default function RenewalsList() {
                             value={row.invoice_status || 'Not'}
                             onChange={(e, val) => handleInvoiceStatus(row.id, val !== undefined ? val : e.target.value)}
                             size="xs"
-                            className="w-full max-w-[72px] mx-auto block"
+                            className="w-full min-w-[66px] max-w-[76px] mx-auto"
                             options={[
                               { value: 'Not', label: 'Not' },
                               { value: 'Sent', label: 'Sent' },
@@ -2592,7 +2664,7 @@ export default function RenewalsList() {
                             value={row.payment_status || 'No'}
                             onChange={(e, val) => handlePaymentStatus(row.id, val !== undefined ? val : e.target.value)}
                             size="xs"
-                            className="w-full max-w-[72px] mx-auto block"
+                            className="w-full min-w-[66px] max-w-[76px] mx-auto"
                             options={[
                               { value: 'No', label: 'No' },
                               { value: 'Yes', label: 'Yes' },

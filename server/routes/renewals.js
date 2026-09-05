@@ -20,6 +20,60 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
+// SECURITY: object-level ownership check for the 'sales' role. Renewals were
+// previously readable/writable by any authenticated sales user via any ID —
+// confirmed exploitable in a security audit (GET/PUT/PATCH /api/renewals/:id
+// for a renewal owned by a different rep returned 200). Mirrors the ownership
+// pattern already used in server/routes/visits.js. Never applies to admin/cst
+// — only 'sales' is scoped, matching the same role check used everywhere else
+// in this file (queryBuilder.js's agent tools use the identical comparison).
+function isOwnedBySalesUser(renewal, user) {
+  if (!renewal) return false;
+  const ownerMatch = (renewal.owner || '').toLowerCase() === (user.fullName || '').toLowerCase();
+  const emailMatch = (renewal.sales_email || '').toLowerCase() === (user.email || '').toLowerCase();
+  return ownerMatch || emailMatch;
+}
+
+function assertRenewalOwnership(renewal, req, res) {
+  if (req.user.role === 'sales' && !isOwnedBySalesUser(renewal, req.user)) {
+    res.status(403).json({ error: 'You do not have access to this renewal record.' });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * For routes that UPDATE by id without already having fetched the row (most
+ * of them go straight to an UPDATE ... WHERE id = $1 RETURNING *). Fetches
+ * just enough to check ownership before the real query runs. Returns null
+ * (and has already sent a 404/403 response) if the caller should stop.
+ */
+async function fetchAndCheckOwnership(id, req, res) {
+  const { rows } = await db.query('SELECT owner, sales_email FROM renewals WHERE id = $1', [id]);
+  if (rows.length === 0) {
+    res.status(404).json({ error: 'Renewal not found.' });
+    return null;
+  }
+  if (!assertRenewalOwnership(rows[0], req, res)) return null;
+  return rows[0];
+}
+
+/**
+ * Batch-route equivalent: silently narrows an ids array down to the subset a
+ * 'sales' caller actually owns, rather than 403ing the whole batch — a bulk
+ * action against a client-supplied id list is expected to sometimes include
+ * ids the UI never should have offered; dropping them is safer than an error
+ * that would confirm/deny another rep's record IDs exist.
+ */
+async function filterIdsByOwnership(ids, req) {
+  if (req.user.role !== 'sales') return ids;
+  const { rows } = await db.query(
+    `SELECT id FROM renewals WHERE id = ANY($1) AND (LOWER(owner) = LOWER($2) OR LOWER(sales_email) = LOWER($3))`,
+    [ids, req.user.fullName || '', req.user.email || '']
+  );
+  return rows.map(r => r.id);
+}
+
 const router = Router();
 
 // Real-time Event Stream for live UI updates
@@ -312,6 +366,16 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     }
 
+    // SECURITY: row-level scoping for the 'sales' role — a sales user only
+    // ever sees their own clients. Appended after every other filter above,
+    // unconditionally, so no combination of query params can widen it.
+    if (req.user.role === 'sales') {
+      const pOwner = paramIndex++;
+      const pEmail = paramIndex++;
+      query += ` AND (LOWER(owner) = LOWER($${pOwner}) OR LOWER(sales_email) = LOWER($${pEmail}))`;
+      params.push(req.user.fullName || '', req.user.email || '');
+    }
+
     const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as total');
     const { rows: countRows } = await db.query(countQuery, params);
     const total = parseInt(countRows[0].total);
@@ -320,10 +384,29 @@ router.get('/', authenticateToken, async (req, res) => {
     const sortCol = validSorts.includes(sort) ? sort : 'renewal_date';
     const sortOrder = order ? (order.toLowerCase() === 'desc' ? 'DESC' : 'ASC') : 'ASC';
     
+    const sortTierSql = `CASE 
+      -- Cancelled renewals at the very bottom of the table
+      WHEN LOWER(COALESCE(renewal_confirmation, '')) IN ('cancelled', 'lost', 'service_discontinued')
+        OR LOWER(COALESCE(status, '')) = 'cancelled'
+        OR LOWER(COALESCE(edit_status, '')) = 'cancelled'
+      THEN 3
+      -- Expired records
+      WHEN status = 'Expired' OR renewal_date < CURRENT_DATE
+      THEN 2
+      -- Renewed / Completed / Called data
+      WHEN status = 'Renewed' 
+        OR LOWER(COALESCE(renewal_confirmation, '')) = 'renewed'
+        OR LOWER(COALESCE(follow_up_status, '')) LIKE '%completed%'
+        OR LOWER(COALESCE(follow_up_status, '')) LIKE '%called%'
+      THEN 1 
+      -- Active renewals on top
+      ELSE 0 
+    END ASC`;
+
     if (sortCol === 'renewal_date') {
-      query += ` ORDER BY CASE WHEN status = 'Expired' THEN 1 ELSE 0 END ASC, ${sortCol} ${sortOrder} NULLS LAST`;
+      query += ` ORDER BY ${sortTierSql}, CASE WHEN renewal_date IS NULL THEN 1 ELSE 0 END ASC, renewal_date ${sortOrder}`;
     } else {
-      query += ` ORDER BY CASE WHEN status = 'Expired' THEN 1 ELSE 0 END ASC, ${sortCol} ${sortOrder}`;
+      query += ` ORDER BY ${sortTierSql}, ${sortCol} ${sortOrder}`;
     }
 
     const parsedLimit = limit === 'all' ? 100000 : (parseInt(limit) || 10000);
@@ -365,15 +448,22 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/edits-history', authenticateToken, async (req, res) => {
   try {
     const { limit = 50 } = req.query;
+    const params = [parseInt(limit)];
+    let scopeClause = '';
+    if (req.user.role === 'sales') {
+      scopeClause = 'WHERE (LOWER(r.owner) = LOWER($2) OR LOWER(r.sales_email) = LOWER($3))';
+      params.push(req.user.fullName || '', req.user.email || '');
+    }
     const { rows } = await db.query(`
       SELECT rh.*, u.full_name as performed_by_name, u.role as performed_by_role,
              r.unique_id, r.client_name, r.service, r.value, r.renewal_date, r.status
       FROM renewal_history rh
       JOIN users u ON rh.performed_by = u.id
       LEFT JOIN renewals r ON rh.renewal_id = r.id
+      ${scopeClause}
       ORDER BY rh.performed_at DESC
       LIMIT $1
-    `, [parseInt(limit)]);
+    `, params);
     res.json(rows);
   } catch (err) {
     console.error('Edits history error:', err);
@@ -541,6 +631,8 @@ router.patch('/:id/invoice', authenticateToken, requireRole('sales', 'admin', 'c
     return res.status(400).json({ error: 'Invalid invoice_status. Must be "Sent" or "Not".' });
   }
   try {
+    if (!(await fetchAndCheckOwnership(req.params.id, req, res))) return;
+
     let query, params;
     if (invoice_status === 'Sent') {
       if (!invoice_number || invoice_value === undefined || invoice_value === null || !invoice_sent_date) {
@@ -598,6 +690,8 @@ router.patch('/:id/stop-email', authenticateToken, requireRole('sales', 'admin',
   }
 
   try {
+    if (!(await fetchAndCheckOwnership(req.params.id, req, res))) return;
+
     const { rows } = await db.query(
       `UPDATE renewals SET stop_email = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
       [stop_email, req.params.id]
@@ -621,9 +715,10 @@ router.post('/batch-stop-email', authenticateToken, requireRole('sales', 'admin'
   }
 
   try {
+    const scopedIds = await filterIdsByOwnership(ids, req);
     const { rows } = await db.query(
       `UPDATE renewals SET stop_email = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2) RETURNING *`,
-      [stop_email, ids]
+      [stop_email, scopedIds]
     );
 
     res.json({ message: `Successfully ${stop_email ? 'stopped' : 'resumed'} emails for ${rows.length} client(s).`, data: rows });
@@ -641,19 +736,20 @@ router.post('/batch-update-status', authenticateToken, requireRole('sales', 'adm
   }
 
   try {
+    const scopedIds = await filterIdsByOwnership(ids, req);
     if (status) {
-      await db.query(`UPDATE renewals SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2)`, [status, ids]);
+      await db.query(`UPDATE renewals SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2)`, [status, scopedIds]);
     }
     if (renewal_confirmation) {
-      await db.query(`UPDATE renewals SET renewal_confirmation = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2)`, [renewal_confirmation, ids]);
+      await db.query(`UPDATE renewals SET renewal_confirmation = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2)`, [renewal_confirmation, scopedIds]);
     }
 
     await db.query(`
       INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
       VALUES ($1, 'bulk_status_update', 'renewals', 'BULK', $2)
-    `, [req.user.id, `Bulk updated ${ids.length} renewal records.`]);
+    `, [req.user.id, `Bulk updated ${scopedIds.length} renewal records.`]);
 
-    res.json({ message: `Successfully updated ${ids.length} renewal record(s).` });
+    res.json({ message: `Successfully updated ${scopedIds.length} renewal record(s).` });
   } catch (err) {
     console.error('Batch update status error:', err);
     res.status(500).json({ error: 'Failed to bulk update status.' });
@@ -668,7 +764,8 @@ router.post('/batch-send-reminder', authenticateToken, requireRole('sales', 'adm
   }
 
   try {
-    const { rows: selectedRenewals } = await db.query('SELECT * FROM renewals WHERE id = ANY($1) AND is_deleted = false', [ids]);
+    const scopedIds = await filterIdsByOwnership(ids, req);
+    const { rows: selectedRenewals } = await db.query('SELECT * FROM renewals WHERE id = ANY($1) AND is_deleted = false', [scopedIds]);
     const { sendEmail } = await import('../services/emailService.js');
 
     let sentCount = 0;
@@ -677,8 +774,8 @@ router.post('/batch-send-reminder', authenticateToken, requireRole('sales', 'adm
       const html = `
         <div style="font-family: sans-serif; padding: 20px; color: #333;">
           <h2>Renewal Reminder</h2>
-          <p>Dear ${r.client_name},</p>
-          <p>This is a friendly reminder regarding your upcoming renewal for <strong>${r.service}</strong> due on <strong>${r.renewal_date ? new Date(r.renewal_date).toLocaleDateString('en-IN') : 'N/A'}</strong>.</p>
+          <p>Dear ${escapeHtml(r.client_name)},</p>
+          <p>This is a friendly reminder regarding your upcoming renewal for <strong>${escapeHtml(r.service)}</strong> due on <strong>${r.renewal_date ? new Date(r.renewal_date).toLocaleDateString('en-IN') : 'N/A'}</strong>.</p>
           <p>Please contact us to confirm your renewal.</p>
           <br>
           <p>Regards,<br>MarsLab Renewal Team</p>
@@ -736,6 +833,8 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
   }
 
   try {
+    if (!(await fetchAndCheckOwnership(req.params.id, req, res))) return;
+
     let query, params;
     if (payment_status === 'Yes') {
       if (payment_amount === undefined || payment_amount === null || !payment_received_date) {
@@ -808,15 +907,15 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
               <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                 <tr style="background-color: #f9fafb;">
                   <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; width: 180px;">Client ID</td>
-                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${r.unique_id}</td>
+                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${escapeHtml(r.unique_id)}</td>
                 </tr>
                 <tr>
                   <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold;">Client Name</td>
-                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${r.client_name}</td>
+                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${escapeHtml(r.client_name)}</td>
                 </tr>
                 <tr style="background-color: #f9fafb;">
                   <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold;">Service</td>
-                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${r.service}</td>
+                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${escapeHtml(r.service)}</td>
                 </tr>
                 <tr>
                   <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold;">Payment Amount</td>
@@ -828,7 +927,7 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
                 </tr>
                 <tr>
                   <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold;">Recorded By</td>
-                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${req.user.fullName || 'Finance'} (${req.user.role || 'finance'})</td>
+                  <td style="padding: 10px; border: 1px solid #e5e7eb;">${escapeHtml(req.user.fullName || 'Finance')} (${escapeHtml(req.user.role || 'finance')})</td>
                 </tr>
               </table>
               <p>Regards,<br/>Renewal Management System</p>
@@ -931,13 +1030,20 @@ router.delete('/:id/permanent', authenticateToken, requireRole('admin'), async (
 // Get expired renewals with no expiry reason
 router.get('/expired-no-reason', authenticateToken, async (req, res) => {
   try {
+    const params = [];
+    let scopeClause = '';
+    if (req.user.role === 'sales') {
+      scopeClause = ' AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))';
+      params.push(req.user.fullName || '', req.user.email || '');
+    }
     const { rows } = await db.query(`
-      SELECT * FROM renewals 
-      WHERE status = 'Expired' 
+      SELECT * FROM renewals
+      WHERE status = 'Expired'
         AND (expiry_reason IS NULL OR TRIM(expiry_reason) = '')
         AND is_deleted = false
+        ${scopeClause}
       ORDER BY renewal_date ASC
-    `);
+    `, params);
     res.json(rows);
   } catch (err) {
     console.error('Fetch expired no reason error:', err);
@@ -975,6 +1081,7 @@ router.get('/:id/readonly', authenticateToken, async (req, res) => {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     if (!renewal.renewal_date) {
       renewal.days_left = null;
@@ -1008,6 +1115,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     if (!renewal.renewal_date) {
       renewal.days_left = null;
@@ -1166,7 +1274,11 @@ router.post('/', authenticateToken, requireRole('sales', 'admin', 'cst'), async 
     res.status(201).json(created);
   } catch (err) {
     console.error('Create renewal error:', err);
-    res.status(500).json({ error: err.message || 'Failed to create renewal.' });
+    // SECURITY: this bypassed the global error handler's NODE_ENV gate
+    // (server/index.js) and returned raw err.message straight to the client
+    // in production — e.g. a Postgres constraint violation naming the exact
+    // column/table, letting an attacker probe schema via malformed payloads.
+    res.status(500).json({ error: process.env.NODE_ENV !== 'production' ? err.message : 'Failed to create renewal.' });
   }
 });
 
@@ -1177,6 +1289,17 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
     const { records } = req.body;
     if (!records || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ error: 'No records provided for import.' });
+    }
+    // SECURITY: the single-create route (POST /) caps text-field lengths and
+    // this loop didn't — a crafted import row with e.g. a multi-KB
+    // client_name would insert unbounded text that later reaches unescaped
+    // HTML emails/notifications downstream. Also cap batch size: nothing here
+    // previously limited how many rows one request could queue, so a request
+    // within the 2mb JSON body limit could still hold thousands of tiny rows,
+    // each running its own serial INSERT + activity-log + history write
+    // inside one long-held transaction.
+    if (records.length > 1000) {
+      return res.status(400).json({ error: 'Cannot import more than 1000 records in a single batch.' });
     }
 
     await client.query('BEGIN');
@@ -1217,6 +1340,20 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
       // Validate required fields
       if (!client_name || !service || !renewal_date || !owner || !client_email || !contact_number) {
         throw new Error(`Row validation failed: Client Name, Service, Renewal Date, Contact Person, Client Email, Contact Number, and Reference ID are required.`);
+      }
+
+      // Same length caps as POST / — see the SECURITY note above the batch-size check.
+      if ([client_name, service, owner].some(v => String(v).length > 255)) {
+        throw new Error(`Row validation failed for ${client_name}: Client Name, Service, and Contact Person must not exceed 255 characters.`);
+      }
+      if (String(client_email).length > 255 || (sales_email && String(sales_email).length > 255)) {
+        throw new Error(`Row validation failed for ${client_name}: email fields must not exceed 255 characters.`);
+      }
+      if (contact_number && String(contact_number).length > 50) {
+        throw new Error(`Row validation failed for ${client_name}: contact number must not exceed 50 characters.`);
+      }
+      if (reference_id && String(reference_id).length > 100) {
+        throw new Error(`Row validation failed for ${client_name}: reference ID must not exceed 100 characters.`);
       }
 
       // Parse date and calculate status
@@ -1318,7 +1455,7 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('CSV import error:', err);
-    res.status(500).json({ error: err.message || 'Failed to import CSV records.' });
+    res.status(500).json({ error: process.env.NODE_ENV !== 'production' ? err.message : 'Failed to import CSV records.' });
   } finally {
     client.release();
   }
@@ -1330,6 +1467,7 @@ router.put('/:id/renew', authenticateToken, requireRole('sales', 'admin', 'cst')
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     const { renewal_date, service, value, status } = req.body;
 
@@ -1415,6 +1553,7 @@ router.put('/:id/follow-up', authenticateToken, requireRole('sales', 'admin', 'c
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     await db.query(`
       UPDATE renewals SET follow_up_status = $1, follow_up_remarks = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3
@@ -1442,8 +1581,9 @@ router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), asyn
     } = req.body;
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
-    
+
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     if (!client_name || !service || !owner || !client_email || !contact_number || !invoice_number) {
       return res.status(400).json({ error: 'Client Name, Service, Contact Person, Client Email, Contact Number, Reference ID, and Invoice Number are required.' });
@@ -1683,6 +1823,7 @@ router.patch('/:id/product-costs', authenticateToken, requireRole('sales', 'admi
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     const previousData = JSON.stringify({
       quantity: renewal.quantity,
@@ -1853,6 +1994,8 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 // Get renewal history
 router.get('/:id/history', authenticateToken, async (req, res) => {
   try {
+    if (!(await fetchAndCheckOwnership(req.params.id, req, res))) return;
+
     const { rows: history } = await db.query(`
       SELECT rh.*, u.full_name as performed_by_name
       FROM renewal_history rh
@@ -1872,6 +2015,7 @@ router.put('/:id/request-edit', authenticateToken, requireRole('sales'), async (
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     await db.query('UPDATE renewals SET edit_status = $1 WHERE id = $2', ['requested', req.params.id]);
     
@@ -2035,9 +2179,9 @@ router.get('/:id/approve-edit-email', async (req, res) => {
                 </p>
                 <div style="background:#f8fafc;border-left:4px solid #10b981;border-radius:8px;padding:20px;margin:0 0 24px;">
                   <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client ID</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.unique_id}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.client_name}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.service}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client ID</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.unique_id)}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.client_name)}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.service)}</td></tr>
                     <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">Approved for Edit</td></tr>
                   </table>
                 </div>
@@ -2133,9 +2277,9 @@ router.put('/:id/approve-edit', authenticateToken, requireRole('admin'), async (
                 </p>
                 <div style="background:#f8fafc;border-left:4px solid #10b981;border-radius:8px;padding:20px;margin:0 0 24px;">
                   <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client ID</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.unique_id}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.client_name}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.service}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client ID</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.unique_id)}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.client_name)}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.service)}</td></tr>
                     <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">Approved for Edit</td></tr>
                   </table>
                 </div>
@@ -2197,6 +2341,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admi
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     if (renewal_confirmation === 'pending') {
       await db.query(`
@@ -2418,11 +2563,11 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admi
                 </p>
                 <div style="background:#f8fafc;border-left:4px solid ${statusColor};border-radius:8px;padding:20px;margin:0 0 24px;">
                   <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.client_name}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${renewal.service}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.client_name)}</td></tr>
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.service)}</td></tr>
                     <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Renewal Date</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${new Date(renewal.renewal_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:${statusColor};font-size:14px;font-weight:700;text-align:right;">${label}</td></tr>
-                    ${remarks ? `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Remarks</td><td style="padding:6px 0;color:#1e293b;font-size:14px;text-align:right;">${remarks}</td></tr>` : ''}
+                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:${statusColor};font-size:14px;font-weight:700;text-align:right;">${escapeHtml(label)}</td></tr>
+                    ${remarks ? `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Remarks</td><td style="padding:6px 0;color:#1e293b;font-size:14px;text-align:right;">${escapeHtml(remarks)}</td></tr>` : ''}
                   </table>
                 </div>
                 <p style="color:#94a3b8;font-size:13px;margin:32px 0 0;padding-top:20px;border-top:1px solid #e2e8f0;">
@@ -2478,10 +2623,11 @@ router.put('/:id/expiry-reason', authenticateToken, requireRole('sales', 'admin'
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     await db.query(`
-      UPDATE renewals 
-      SET expiry_reason = $1, updated_at = CURRENT_TIMESTAMP 
+      UPDATE renewals
+      SET expiry_reason = $1, updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
     `, [expiry_reason, req.params.id]);
 

@@ -190,10 +190,10 @@ export default function GlassSelect({
 
   // Size styles
   const sizeStyles = {
-    xs: 'py-1 px-2 text-[11px] rounded-lg',
-    sm: 'py-1.5 px-3 text-xs rounded-xl',
-    md: 'py-2 px-3.5 text-xs rounded-xl',
-    lg: 'py-2.5 px-4 text-sm rounded-xl',
+    xs: 'py-0.5 px-2 text-[11px] rounded-lg gap-1',
+    sm: 'py-1.5 px-3 text-xs rounded-xl gap-1.5',
+    md: 'py-2 px-3.5 text-xs rounded-xl gap-2',
+    lg: 'py-2.5 px-4 text-sm rounded-xl gap-2',
   };
 
   return (
@@ -215,12 +215,12 @@ export default function GlassSelect({
         disabled={disabled}
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
-        className={`dropdown-btn-glass ${sizeStyles[size] || sizeStyles.md} ${
+        className={`dropdown-btn-glass !flex !flex-row items-center justify-between flex-nowrap whitespace-nowrap ${sizeStyles[size] || sizeStyles.md} ${
           isOpen ? 'ring-2 ring-brand-500/60 border-white/90 dark:border-white/30 !bg-white/80 dark:!bg-white/[0.18]' : ''
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
         style={{ width: className.includes('w-full') ? '100%' : undefined }}
       >
-        <div className="flex items-center gap-2 min-w-0 overflow-hidden text-left">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden text-left flex-1">
           {LeadingIcon && (
             <LeadingIcon className="w-3.5 h-3.5 flex-shrink-0 text-slate-500 dark:text-slate-400" />
           )}
@@ -230,9 +230,9 @@ export default function GlassSelect({
         </div>
 
         <ChevronDown
-          className={`w-3.5 h-3.5 flex-shrink-0 ml-1.5 text-slate-500 dark:text-slate-400 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-brand-500 dark:text-brand-400' : 'rotate-0'
-          }`}
+          className={`flex-shrink-0 ml-auto text-slate-500 dark:text-slate-400 transition-transform duration-200 ${
+            size === 'xs' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'
+          } ${isOpen ? 'rotate-180 text-brand-500 dark:text-brand-400' : 'rotate-0'}`}
         />
       </button>
 

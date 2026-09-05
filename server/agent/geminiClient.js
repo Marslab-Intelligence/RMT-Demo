@@ -36,19 +36,47 @@ const MAX_DAILY_USD = parseFloat(process.env.AGENT_MAX_DAILY_USD || '10');
 const COST_PER_1K_INPUT = { 'gemini-2.5-flash': 0.0003, 'gemini-2.5-pro': 0.00125 };
 const COST_PER_1K_OUTPUT = { 'gemini-2.5-flash': 0.0025, 'gemini-2.5-pro': 0.01 };
 
-// Verified empirically against the actual key in use: the Gemini free tier
-// caps at 20 generateContent requests/day, per project, per model — a hard
-// wall independent of the dollar-budget check below (20 cheap flash calls
-// cost fractions of a cent, so MAX_DAILY_USD would never trip first). Without
-// this, every call past #20 still goes out, gets a 429 from Google, and the
-// user sees confusing, seemingly-random "temporarily unavailable" answers —
-// this makes the failure deterministic and lets the UI show it honestly.
-const DAILY_REQUEST_LIMIT = parseInt(process.env.AGENT_MAX_REQUESTS_PER_DAY || '20', 10);
+// Verified empirically against the actual key in use (2026-09-05): Google's
+// real free-tier ceiling for gemini-2.5-flash on this key is 20 generate-
+// content requests/day and 5/minute, per project, per model. By deliberate
+// choice this app only ever uses 30% of that (6/day, 1/minute) by default —
+// this key is used for local dev/testing as well as production, and burning
+// the full daily quota on ad-hoc testing (as happened once already) leaves
+// nothing for the actual daily sweep or real chat usage until Google's quota
+// resets. Set AGENT_MAX_REQUESTS_PER_DAY / AGENT_MAX_REQUESTS_PER_MINUTE
+// explicitly to override once this key is on a paid plan with real headroom.
+const GOOGLE_OBSERVED_DAILY_LIMIT = 20;
+const GOOGLE_OBSERVED_PER_MINUTE_LIMIT = 5;
+const SELF_IMPOSED_QUOTA_FRACTION = 0.3;
+
+// Without a request-count gate at all, every call past Google's real cap
+// still goes out, gets a 429, and the user sees confusing, seemingly-random
+// "temporarily unavailable" answers — this makes the failure deterministic
+// and lets the UI show it honestly, well before the real ceiling is hit.
+const DAILY_REQUEST_LIMIT = parseInt(
+  process.env.AGENT_MAX_REQUESTS_PER_DAY || String(Math.max(1, Math.floor(GOOGLE_OBSERVED_DAILY_LIMIT * SELF_IMPOSED_QUOTA_FRACTION))),
+  10
+);
+
+// Google separately caps generativelanguage.googleapis.com per-minute,
+// independent of, and far tighter in the short term than, the daily cap
+// above. A burst of even a handful of chat questions in the same minute (or
+// one runAgentTask escalation chain making 2-3 calls back to back) was enough
+// to trip this and come back as a raw 429 from Google — this makes that
+// deterministic and local instead of a network round-trip that sometimes
+// works and sometimes doesn't for reasons invisible to the caller. Same 30%
+// self-imposed policy as the daily limit above.
+const PER_MINUTE_REQUEST_LIMIT = parseInt(
+  process.env.AGENT_MAX_REQUESTS_PER_MINUTE || String(Math.max(1, Math.floor(GOOGLE_OBSERVED_PER_MINUTE_LIMIT * SELF_IMPOSED_QUOTA_FRACTION))),
+  10
+);
 
 let client = null;
 let spendToday = 0;
 let requestsToday = 0;
 let usageDateBucket = new Date().toISOString().slice(0, 10);
+let requestsThisMinute = 0;
+let minuteWindowStart = Date.now();
 
 function getClient() {
   if (!process.env.GEMINI_API_KEY) return null;
@@ -65,9 +93,18 @@ function rolloverIfNewDay() {
   }
 }
 
+function rolloverMinuteWindowIfExpired() {
+  const now = Date.now();
+  if (now - minuteWindowStart >= 60_000) {
+    minuteWindowStart = now;
+    requestsThisMinute = 0;
+  }
+}
+
 function trackUsage(model, usageMetadata) {
   rolloverIfNewDay();
   requestsToday += 1;
+  requestsThisMinute += 1;
   const promptTokens = usageMetadata?.promptTokenCount || 0;
   // Output cost covers both the visible answer and any thinking tokens spent
   // getting there — both are billed by Gemini even when thinking is on.
@@ -79,19 +116,18 @@ function trackUsage(model, usageMetadata) {
 
 /**
  * The single gate every exported call below passes through first. Checked
- * BEFORE any network call — once the daily request count is known to be
- * exhausted, there is no point sending #21 to Google just to have it
- * rejected; failing locally is instant and deterministic instead of an
- * unpredictable round-trip that sometimes 429s and sometimes doesn't
- * (Google's own per-minute limits made the failures look random on top of
- * the daily cap, which is exactly what made this confusing to diagnose from
- * the outside).
+ * BEFORE any network call — once a limit is known to be exhausted, there is
+ * no point sending the next call to Google just to have it rejected; failing
+ * locally is instant and deterministic instead of an unpredictable round-trip
+ * that sometimes 429s and sometimes doesn't.
  */
 function gateStatus() {
   const c = getClient();
   if (!c) return { blocked: true, reason: 'no_api_key' };
   rolloverIfNewDay();
+  rolloverMinuteWindowIfExpired();
   if (requestsToday >= DAILY_REQUEST_LIMIT) return { blocked: true, reason: 'daily_limit_reached' };
+  if (requestsThisMinute >= PER_MINUTE_REQUEST_LIMIT) return { blocked: true, reason: 'rate_limited' };
   if (spendToday >= MAX_DAILY_USD) return { blocked: true, reason: 'budget_exceeded' };
   return { blocked: false, client: c };
 }
@@ -113,7 +149,15 @@ export async function classifyIntent({ prompt, allowedTools, fallbackTool }) {
       model: MODEL_FLASH,
       contents: prompt,
       config: {
-        systemInstruction: `You route user requests to exactly one tool for a renewal-management agent. ` +
+        systemInstruction: `You route user requests to exactly one tool for a B2B software/service-renewal ` +
+          `management agent (client name: "records" or "contracts" both mean rows in the renewals table). ` +
+          `Domain vocabulary you should recognize even when paraphrased: renewal status is one of Active, ` +
+          `Pending Renewal, Renewed, Expired; renewal_confirmation tracks pending/reminder_sent/quote_sent/` +
+          `awaiting_client_approval/renewed/cancelled/lost; payment_state is one of unpaid/partially_paid/paid/` +
+          `overdue/disputed/unknown; a "vendor" is who the company buys a license from (Microsoft, AWS, Zoho, ` +
+          `Acronis, Sophos, Seqrite, Tally, GWS), an "owner" or "sales rep"/"BDM"/"CST" is the internal person ` +
+          `assigned to the account. Generic questions like "total records", "how many renewals", "record count" ` +
+          `mean an overall count/summary, not a search for a client literally named that. ` +
           `Reply with ONLY a JSON object, no prose, no markdown fences: ` +
           `{"toolName": "<one of: ${allowedTools.join(', ')}>", "params": {...}}. ` +
           `If the request names a record like "RMT-273", extract it into params.id for get_renewal_by_id. ` +
@@ -321,8 +365,49 @@ export async function generateQuerySpec(question) {
   }
 }
 
+/**
+ * Escalation step 3 of the agent's bounded retry chain (see agentRunner.js).
+ * Used only after a first answer_data_question attempt returned zero rows or
+ * failed to compile — asks the model to rewrite the ORIGINAL user question as
+ * one narrower, more literal question about the renewals schema, so a second
+ * generateQuerySpec attempt has a better chance of matching a real column.
+ * This never answers the question itself and never invents data — it only
+ * proposes better question text, which still goes through the same
+ * allow-list validation as any other generateQuerySpec call.
+ */
+export async function rephraseDataQuestion({ originalQuestion, priorAttempts = [] }) {
+  const gate = gateStatus();
+  if (gate.blocked) return { ok: false, reason: gate.reason };
+  const c = gate.client;
+
+  try {
+    const response = await c.models.generateContent({
+      model: MODEL_FLASH,
+      contents: `Original question: "${originalQuestion}"\n` +
+        `Interpretations already tried and unsuccessful: ${priorAttempts.length ? priorAttempts.join('; ') : 'none'}`,
+      config: {
+        systemInstruction: 'The question above could not be answered against a renewal-management database ' +
+          '(a table of client contract/subscription renewals — fields like client, service, vendor, status, ' +
+          'dates, invoicing, and payment). Rewrite it as ONE precise, narrower question about that data, using ' +
+          'plain business terms, that is more likely to match a concrete field or aggregate than the original ' +
+          'phrasing did. Reply with ONLY the rewritten question text — no prose, no quotes, no explanation.',
+        maxOutputTokens: 120,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    trackUsage(MODEL_FLASH, response.usageMetadata);
+
+    if (!response.text || !response.text.trim()) return { ok: false, reason: 'empty_response' };
+    return { ok: true, question: response.text.trim() };
+  } catch (err) {
+    return { ok: false, reason: 'call_failed', error: err.message };
+  }
+}
+
 export function getAgentBudgetStatus() {
   rolloverIfNewDay();
+  rolloverMinuteWindowIfExpired();
   // Google doesn't publish the exact reset boundary for this quota; UTC
   // midnight is the common convention for daily API limits and matches what
   // was observed empirically, but treat this as an estimate, not a
@@ -332,10 +417,12 @@ export function getAgentBudgetStatus() {
   return {
     requestsToday,
     dailyRequestLimit: DAILY_REQUEST_LIMIT,
+    requestsThisMinute,
+    perMinuteRequestLimit: PER_MINUTE_REQUEST_LIMIT,
     spendToday: Math.round(spendToday * 10000) / 10000,
     maxDailyUsd: MAX_DAILY_USD,
     dateBucket: usageDateBucket,
-    limitReached: requestsToday >= DAILY_REQUEST_LIMIT || spendToday >= MAX_DAILY_USD,
+    limitReached: requestsToday >= DAILY_REQUEST_LIMIT || spendToday >= MAX_DAILY_USD || requestsThisMinute >= PER_MINUTE_REQUEST_LIMIT,
     resetsAt: resetsAt.toISOString(),
     hasApiKey: !!process.env.GEMINI_API_KEY,
   };

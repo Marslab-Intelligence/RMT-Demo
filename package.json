@@ -13,6 +13,7 @@
     "seed": "node server/seed.js",
     "seed:demo": "node server/seed1000Dummy.js",
     "seed:1000": "node server/seed1000Dummy.js",
+    "verify:gemini": "node server/agent/verifyGeminiKey.js",
     "test": "node --test test/**/*.test.js"
   },
   "dependencies": {
@@ -45,8 +46,7 @@
     "react-router-dom": "^6.26.0",
     "recharts": "^2.12.7",
     "three": "^0.184.0",
-    "uuid": "^14.0.1",
-    "xlsx": "^0.18.5"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

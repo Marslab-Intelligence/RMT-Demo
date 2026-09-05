@@ -1,12 +1,44 @@
 import express from 'express';
+import crypto from 'crypto';
 import db from '../db.js';
 import { sendCliqNotification } from '../services/cliqService.js';
 import { broadcastEvent } from '../services/realtime.js';
 
 const router = express.Router();
 
+// SECURITY: this endpoint cannot use authenticateToken (Zoho Books calls it
+// directly, with no user session), so it needs its own credential. Without
+// this, the route was a fully unauthenticated write to any renewal record —
+// confirmed live in a security audit: a single unauthenticated POST with a
+// guessed RMT ID (these are sequential — RMT-0001, RMT-0002, ... — and
+// trivially enumerable) could falsify invoice/payment status on any real
+// client contract. Configure the same value as a custom header in Zoho
+// Books' webhook settings (Settings > Automation > Webhooks > Headers).
+const WEBHOOK_SECRET = process.env.ZOHO_BOOKS_WEBHOOK_SECRET || '';
+
+function isValidWebhookSecret(providedSecret) {
+  // Fails closed: if the secret isn't configured, every request is rejected
+  // rather than the endpoint silently accepting unauthenticated writes
+  // because setup was skipped — same philosophy as JWT_SECRET refusing to
+  // start when missing, applied per-request since this route can't refuse
+  // to mount without breaking the rest of the app.
+  if (!WEBHOOK_SECRET) return false;
+  const expected = Buffer.from(WEBHOOK_SECRET);
+  const provided = Buffer.from(String(providedSecret || ''));
+  // Length must match before timingSafeEqual (it throws on mismatched
+  // lengths) — comparing lengths first leaks length via a non-constant-time
+  // check, an accepted, standard tradeoff versus leaking any byte of the
+  // secret itself, which the equal-length branch below fully avoids.
+  return expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
+}
+
 router.post('/zoho-books', async (req, res) => {
   try {
+    if (!isValidWebhookSecret(req.headers['x-webhook-secret'])) {
+      console.warn('[Zoho Webhook] Rejected request: missing or invalid X-Webhook-Secret header.');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const { invoice } = req.body;
     if (!invoice) {
       return res.status(400).json({ error: 'Missing invoice payload' });

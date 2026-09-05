@@ -219,6 +219,13 @@ export const initDb = async () => {
       ALTER TABLE renewals ADD COLUMN IF NOT EXISTS entity VARCHAR(255) DEFAULT '';
       ALTER TABLE renewals ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(50) DEFAULT 'Invoice';
       ALTER TABLE renewals ADD COLUMN IF NOT EXISTS quotation_number VARCHAR(255) DEFAULT '';
+      -- Pre-existing bug found during testing: PATCH /:id/stop-email and its
+      -- batch variant (server/routes/renewals.js) always wrote to this
+      -- column, and the frontend's "stop/resume reminders" toggle
+      -- (ClientDetails.jsx, RenewalsList.jsx) has been calling that route
+      -- since it was built — but the column was never created, so every
+      -- click threw a 500 in every environment, including production.
+      ALTER TABLE renewals ADD COLUMN IF NOT EXISTS stop_email BOOLEAN DEFAULT FALSE;
 
       ALTER TABLE renewals DROP CONSTRAINT IF EXISTS renewals_renewal_confirmation_check;
       ALTER TABLE trash_renewals DROP CONSTRAINT IF EXISTS trash_renewals_renewal_confirmation_check;

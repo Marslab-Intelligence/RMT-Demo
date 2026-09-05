@@ -355,12 +355,7 @@ export default function Dashboard() {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-black dark:text-white">Actionable Executive Dashboard</h1>
-            <span className="bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-brand-500/20 backdrop-blur-md">
-              Phase 2
-            </span>
-          </div>
+          <h1 className="text-2xl font-bold text-black dark:text-white">Dashboard</h1>
           <p className="text-slate-800 dark:text-surface-400 mt-1 text-sm">
             Welcome back, <span className="font-semibold text-black dark:text-surface-200">{user?.fullName}</span>. Prioritize immediate actions and manage upcoming renewals.
           </p>

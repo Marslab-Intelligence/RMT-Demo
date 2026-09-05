@@ -125,24 +125,24 @@ export default function RenewActionModal({ renewal, onClose, onSuccess }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-surface-800 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-surface-200 dark:border-surface-700 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 dark:bg-[#080611]/80 backdrop-blur-md animate-fade-in">
+      <div className="modal-glass w-full max-w-xl overflow-hidden rounded-2xl flex flex-col max-h-[90vh]">
         
-        <div className="px-6 py-4 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center bg-surface-50 dark:bg-surface-900/50">
+        <div className="modal-header-glass px-6 py-4 flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-surface-900 dark:text-white">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
               {isFinance ? 'Process Client Renewal' : 'Update Follow-up Status'}
             </h2>
-            <p className="text-xs text-surface-500 mt-1">{renewal.client_name} - {renewal.unique_id}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{renewal.client_name} - {renewal.unique_id}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-surface-400 hover:text-surface-600 rounded-full hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
           {/* Current Info Summary */}
-          <div className="bg-surface-50 dark:bg-surface-900/50 rounded-lg p-4 mb-6 border border-surface-200 dark:border-surface-700">
+          <div className="bg-slate-50/70 dark:bg-white/[0.04] rounded-xl p-4 mb-6 border border-slate-200/80 dark:border-white/10">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-surface-500">Current Service</p>
@@ -252,7 +252,7 @@ export default function RenewActionModal({ renewal, onClose, onSuccess }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/50 flex justify-end gap-3">
+        <div className="modal-footer-glass px-6 py-4 flex justify-end gap-3 flex-shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>

@@ -104,19 +104,19 @@ export default function SalesQuickEditModal({ client, onClose, onSuccess, onOpen
   ].filter(f => f.value);
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-xl overflow-hidden border border-surface-200 dark:border-surface-700 flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 dark:bg-[#080611]/80 backdrop-blur-md animate-fade-in">
+      <div className="modal-glass w-full max-w-xl overflow-hidden rounded-2xl flex flex-col max-h-[92vh]">
 
         {/* ── Header ── */}
-        <div className="px-6 py-4 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center bg-surface-50 dark:bg-surface-900/50 flex-shrink-0">
+        <div className="modal-header-glass px-6 py-4 flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="text-base font-bold text-surface-900 dark:text-white flex items-center gap-2">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Lock className="w-4 h-4 text-amber-500" />
               Edit Record
             </h2>
-            <p className="text-xs text-surface-500 mt-0.5 font-mono">{client?.unique_id} · {client?.client_name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">{client?.unique_id} · {client?.client_name}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-surface-400 hover:text-surface-600 rounded-full hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -265,7 +265,7 @@ export default function SalesQuickEditModal({ client, onClose, onSuccess, onOpen
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900/50 flex justify-end gap-3 flex-shrink-0">
+        <div className="modal-footer-glass px-6 py-4 flex justify-end gap-3 flex-shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>

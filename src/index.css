@@ -209,13 +209,15 @@
     box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   }
   .dark .input-field {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.14);
-    box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+    color: #f8fafc;
   }
   .dark .input-field:focus {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(99, 102, 241, 0.6);
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(168, 85, 247, 0.6);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
   }
 
   /* ── Liquid Glass Select & Dropdown Buttons ────────────────── */
@@ -308,18 +310,18 @@
     transform: translateY(-1px);
   }
   .dark .dropdown-btn-glass {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
     box-shadow: 
-      inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.12),
       0 4px 12px rgba(0, 0, 0, 0.25);
-    color: #f1f5f9;
+    color: #f8fafc;
   }
   .dark .dropdown-btn-glass:hover {
-    background: rgba(255, 255, 255, 0.14);
-    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.22);
     box-shadow: 
-      inset 0 1px 2px 0 rgba(255, 255, 255, 0.25),
+      inset 0 1px 2px 0 rgba(255, 255, 255, 0.20),
       0 6px 18px rgba(0, 0, 0, 0.35);
     transform: translateY(-1px);
   }
@@ -340,12 +342,55 @@
       0 6px 16px 0 rgba(0, 0, 0, 0.06);
   }
   .dark .dropdown-menu-glass {
-    background: rgba(20, 17, 32, 0.90);
+    background: rgba(20, 17, 32, 0.96);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
     border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 
       inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
       0 20px 50px -12px rgba(0, 0, 0, 0.7),
       0 8px 24px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  /* ── Liquid Glass Modal Window (Deep Purple Theme) ──────────── */
+  .modal-glass {
+    @apply rounded-2xl overflow-hidden shadow-2xl transition-all;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.9),
+      0 24px 60px -12px rgba(0, 0, 0, 0.15),
+      0 8px 24px 0 rgba(0, 0, 0, 0.08);
+  }
+  .dark .modal-glass {
+    background: rgba(20, 17, 32, 0.96);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
+      0 25px 70px -15px rgba(0, 0, 0, 0.8),
+      0 0 50px rgba(139, 92, 246, 0.10);
+  }
+
+  .modal-header-glass {
+    background: rgba(255, 255, 255, 0.65);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .dark .modal-header-glass {
+    background: rgba(26, 21, 41, 0.75);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  .modal-footer-glass {
+    background: rgba(255, 255, 255, 0.65);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .dark .modal-footer-glass {
+    background: rgba(26, 21, 41, 0.75);
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
   }
 
   /* ── Native Select Option Styling ───────────────────────────── */
@@ -360,7 +405,7 @@
   }
 
   .label {
-    @apply block text-xs font-semibold text-black dark:text-surface-300 mb-1.5;
+    @apply block text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1.5;
   }
 
   /* ── Polished Sidebar ──────────────────────────────────────── */
@@ -542,6 +587,29 @@
 ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
 .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.35); }
+
+/* ── Sleek Custom Scrollbar (Used in Modals & Dropdowns) ───── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 9999px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
 
 /* ── Table Row Glass Hover ────────────────────────────────────── */
 tr {

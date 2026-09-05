@@ -2,6 +2,12 @@ import bcrypt from 'bcryptjs';
 import db, { initDb } from './db.js';
 
 async function seed() {
+  // SECURITY: refuse to run against production — see server/seed1000Dummy.js
+  // for why (real-looking committed accounts with weak passwords).
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Refusing to run: NODE_ENV=production. This seeds demo accounts with weak, publicly-committed passwords.');
+    process.exit(1);
+  }
   await initDb();
   
   try {

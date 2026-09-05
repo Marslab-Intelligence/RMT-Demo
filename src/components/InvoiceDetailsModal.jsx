@@ -78,12 +78,12 @@ export default function InvoiceDetailsModal({ isOpen, renewal, onClose, onSucces
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white/90 dark:bg-surface-800/90 backdrop-blur-md rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-surface-200/50 dark:border-surface-700/50 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 dark:bg-[#080611]/80 backdrop-blur-md animate-fade-in">
+      <div className="modal-glass w-full max-w-md overflow-hidden rounded-2xl flex flex-col max-h-[90vh]">
         
-        <div className="px-6 py-4 border-b border-surface-200/50 dark:border-surface-700/50 flex justify-between items-center bg-surface-50/50 dark:bg-surface-900/50">
+        <div className="modal-header-glass px-6 py-4 flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-surface-900 dark:text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               {docType === 'Sales Order' ? (
                 <ClipboardList className="w-5 h-5 text-brand-500" />
               ) : (
@@ -91,9 +91,9 @@ export default function InvoiceDetailsModal({ isOpen, renewal, onClose, onSucces
               )}
               {docType === 'Sales Order' ? 'Sales Order Details' : 'Invoice Sent Details'}
             </h2>
-            <p className="text-xs text-surface-500 mt-1">{renewal.client_name} - {renewal.unique_id}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{renewal.client_name} - {renewal.unique_id}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-surface-400 hover:text-surface-600 rounded-full hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -177,7 +177,7 @@ export default function InvoiceDetailsModal({ isOpen, renewal, onClose, onSucces
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-surface-200/50 dark:border-surface-700/50 bg-surface-50/50 dark:bg-surface-900/50 flex justify-end gap-3">
+          <div className="modal-footer-glass px-6 py-4 flex justify-end gap-3 flex-shrink-0">
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>

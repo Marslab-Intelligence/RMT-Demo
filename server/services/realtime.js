@@ -1,34 +1,60 @@
 import jwt from 'jsonwebtoken';
+import db from '../db.js';
 
-const DEFAULT_JWT_SECRET = 'b6e8a49f50dc9781cf4275ba098b671ef3b58402ac36de71b9e02c5ef2a0f8b1';
-const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+// SECURITY: no fallback secret here. The previous hardcoded fallback
+// ('b6e8a49f...') was a real secret committed to source — harmless only
+// because middleware/auth.js already refuses to boot the process when
+// JWT_SECRET is unset, but a landmine regardless (this module works standalone
+// or could be imported before that guard runs in some future refactor). If
+// JWT_SECRET is somehow unset here, jwt.verify below throws and every
+// connection is correctly rejected — failing closed, not open.
+const JWT_SECRET = process.env.JWT_SECRET;
 
-if (JWT_SECRET.length < 32 || JWT_SECRET === 'rms-default-secret-key') {
-  console.warn('⚠️ WARNING: Using fallback JWT_SECRET in realtime service.');
-}
 let clients = [];
 
-export const registerClient = (req, res) => {
+export const registerClient = async (req, res) => {
   const token = req.query.token;
   if (!token) {
     res.status(401).json({ error: 'Unauthorized: Missing token' });
     return;
   }
 
+  let decoded;
   try {
-    jwt.verify(token, JWT_SECRET);
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch (err) {
     res.status(401).json({ error: 'Unauthorized: Invalid token' });
     return;
   }
 
-  // Set headers for Server-Sent Events (SSE)
+  // SECURITY: authenticateToken (middleware/auth.js) re-checks is_active on
+  // every request so a deactivated account's session dies immediately; this
+  // endpoint bypassed that (a deactivated employee's still-valid access token
+  // kept streaming live renewal data — client names, values, invoices — for
+  // up to its full 8h lifetime). Same check, applied here too.
+  try {
+    const { rows } = await db.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
+    if (rows.length === 0 || !rows[0].is_active) {
+      res.status(403).json({ error: 'Account is deactivated.' });
+      return;
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+    return;
+  }
+
+  // Set headers for Server-Sent Events (SSE). Deliberately NOT setting
+  // Access-Control-Allow-Origin here — that overrode the app's real,
+  // origin-validated CORS header (set earlier by the cors() middleware in
+  // server/index.js) with a wildcard, letting any website embed
+  // `new EventSource(.../events?token=...)` and read the stream cross-origin
+  // if a token ever reached it through any other channel. Omitting it here
+  // leaves the already-correct header from the global CORS policy in place.
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',
-    'Access-Control-Allow-Origin': '*'
   });
 
   // Write initial connection message

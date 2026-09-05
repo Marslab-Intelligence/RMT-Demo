@@ -34,6 +34,18 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 3001
+          # SECURITY: mirrors the hardening already applied in docker-compose.yml
+          # (non-root, read-only FS, dropped capabilities, no privilege
+          # escalation) — the k3s deployment previously had none of it despite
+          # running the exact same image. Matches Dockerfile's USER node (uid 1000).
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: NODE_ENV
               value: "production"
@@ -120,6 +132,26 @@ spec:
                   name: app-secret
                   key: ZOHO_CLIQ_SALES_WEBHOOK_URL
 
+            # AI Agent (Gemini) — without this, geminiClient.getClient() returns
+            # null and the entire agent subsystem silently runs on its regex
+            # fallback path (no LLM classification, drafting, or NL query
+            # answering). Key must exist under this name in app-secret.
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: GEMINI_API_KEY
+
+            # Required for POST /api/webhooks/zoho-books to accept requests —
+            # without it, that route rejects everything (fails closed). Set
+            # the same value as a custom header (X-Webhook-Secret) in Zoho
+            # Books' webhook config: Settings > Automation > Webhooks > Headers.
+            - name: ZOHO_BOOKS_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ZOHO_BOOKS_WEBHOOK_SECRET
+
           readinessProbe:
             httpGet:
               path: /api/health
@@ -136,3 +168,14 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
+          # Required by readOnlyRootFilesystem above — the app writes nothing
+          # persistent (logs go to stdout), but Node/npm can still touch /tmp.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi

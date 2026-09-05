@@ -693,6 +693,14 @@ async function seedComplementaryData(renewalIds, idsByEmail) {
 }
 
 async function main() {
+  // SECURITY: this creates real-looking @marslab.work accounts with weak,
+  // committed passwords (Demo@1234, sales123, admin123). Refuse to run
+  // against a production database — the only thing standing between this
+  // and live credentials on the real system was remembering not to run it.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Refusing to run: NODE_ENV=production. This seeds demo accounts with weak, publicly-committed passwords.');
+    process.exit(1);
+  }
   await initDb();
   console.log('=== SEEDING 1,000 DUMMY RECORDS FOR CLIENT DEMO ===');
   const idsByEmail = await seedUsers();

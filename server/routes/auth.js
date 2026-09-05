@@ -30,7 +30,22 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET;
 
 // DEMO_MODE exposes a "log in as any active user, no password" endpoint used by the
 // demo login-page user switcher. Never enable this against a real customer dataset.
-const DEMO_MODE = process.env.DEMO_MODE === 'true';
+// SECURITY: hard-gated on more than the env flag alone — a security audit
+// confirmed that with DEMO_MODE=true alone, GET /demo/users is a fully
+// unauthenticated public listing of every active user (id, name, email,
+// role), and POST /demo/login with any of those ids returns a full session
+// with zero password check, including for admin accounts. A leftover or
+// accidentally-copied DEMO_MODE=true in the real deployment would be a
+// complete authentication bypass.
+//
+// NODE_ENV is NOT usable as the second signal here: npm start (package.json)
+// hardcodes NODE_ENV=production unconditionally — including for local/sandbox
+// runs — so checking it would disable demo mode for every legitimate local
+// use, not just real production. FRONTEND_URL is the reliable signal instead:
+// the real deployment always hardcodes it to the production domain in
+// k3s/app-deployment.yaml, while every local/sandbox .env points elsewhere.
+const PRODUCTION_FRONTEND_URL = 'https://rmt.marslabintel.com';
+const DEMO_MODE = process.env.DEMO_MODE === 'true' && process.env.FRONTEND_URL !== PRODUCTION_FRONTEND_URL;
 
 // ==========================================
 // REFRESH TOKEN HELPERS

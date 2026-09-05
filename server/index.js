@@ -146,10 +146,30 @@ const allowedOrigins = [
   'https://rmt.marslabintel.com',
 ].filter(Boolean);
 
+// SECURITY: origin.endsWith('marslabintel.com') and origin.includes('13.232.180.247')
+// were both bypassable — endsWith is a raw suffix match with no preceding-dot
+// boundary, so "https://evilmarslabintel.com" or a purchased domain like
+// "hackmarslabintel.com" passed it; includes() matches the IP as a substring
+// anywhere, so a legal DNS label like "13.232.180.247.attacker.com" also
+// passed. Combined with credentials:true and cookie-based refresh tokens,
+// either one let an attacker-hosted page make credentialed requests and read
+// responses. Fixed by parsing the actual hostname and requiring an exact
+// match or a genuine subdomain (a literal '.' boundary before the suffix).
+function isAllowedOrigin(origin) {
+  if (allowedOrigins.includes(origin)) return true;
+  let hostname;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+  return hostname === 'marslabintel.com' || hostname.endsWith('.marslabintel.com') || hostname === '13.232.180.247';
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow server-to-server (no Origin header), whitelisted origins, or any marslabintel.com subdomain
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('marslabintel.com') || origin.includes('13.232.180.247')) {
+    // Allow server-to-server (no Origin header), whitelisted origins, or any genuine marslabintel.com subdomain
+    if (!origin || isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from origin: ${origin}`);
@@ -272,9 +292,21 @@ app.use((err, req, res, _next) => {
 });
 
 import { initDb } from './db.js';
+import { getAgentBudgetStatus } from './agent/geminiClient.js';
 
 app.listen(PORT, async () => {
   await initDb();
   console.log(`🚀 RenewalPro API running on http://localhost:${PORT}`);
+
+  // Observable-by-design: a missing key doesn't crash anything (every
+  // geminiClient export fails closed to a regex/rule-based fallback), which
+  // is exactly why it can go unnoticed for a long time otherwise — this
+  // makes "the agent is running degraded" visible in the boot log every time.
+  if (!getAgentBudgetStatus().hasApiKey) {
+    console.warn('⚠️  GEMINI_API_KEY is not set — AI agent is running in regex/rule-fallback-only mode (no LLM intent classification, outreach drafting, or natural-language query answering). Set GEMINI_API_KEY to enable it.');
+  } else {
+    console.log('🤖 GEMINI_API_KEY detected — AI agent LLM features enabled.');
+  }
+
   startScheduler();
 });

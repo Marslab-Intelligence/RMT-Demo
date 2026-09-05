@@ -3,13 +3,21 @@ version: '3.8'
 services:
   app:
     build: .
-    network_mode: "host"
+    # SECURITY: was network_mode: "host" — that shares the host's network
+    # namespace directly, bypassing Docker's port isolation entirely for
+    # every port the app process opens, and is what forced the db service
+    # below to publish 5432 to the host in the first place (the app assumed
+    # it could always reach "localhost:5432"). On the default bridge network
+    # instead, the app reaches Postgres by service name and only the port it
+    # actually needs (3001) is published.
+    ports:
+      - "3001:3001"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - PGHOST=localhost
+      - PGHOST=db
     depends_on:
       db:
         condition: service_healthy
@@ -48,8 +56,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    ports:
-      - "5432:5432"
+    # SECURITY: no ports published to the host — only reachable by the app
+    # container over the internal compose network is required. This
+    # previously exposed Postgres directly to the internet on any host with a
+    # public IP and an open security group, with a weak default password
+    # (${PGPASSWORD:-marslab123}) if PGPASSWORD wasn't overridden.
     restart: unless-stopped
 
 volumes:
