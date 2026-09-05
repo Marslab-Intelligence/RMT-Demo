@@ -22,6 +22,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { formatDateTime, formatCurrency, formatDate } from '../utils/formatters';
+import EmptyState from '../components/common/EmptyState';
 
 export default function Notifications() {
   const { token, user } = useAuth();
@@ -266,7 +267,7 @@ export default function Notifications() {
   const actionableList = getActionableItems();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-28">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
         <div>
@@ -309,7 +310,7 @@ export default function Notifications() {
               className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
                 isSelected 
                   ? 'ring-2 ring-brand-500 border-transparent bg-gradient-to-br ' + card.color + ' shadow-lg scale-[1.01]' 
-                  : 'bg-white/60 dark:bg-surface-800/60 border-surface-200/80 dark:border-surface-700/80 hover:border-brand-500/50 hover:shadow-md'
+                  : 'glass-card border border-white/50 dark:border-white/10 hover:border-brand-500/40 hover:-translate-y-0.5 hover:shadow-lg'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -338,7 +339,7 @@ export default function Notifications() {
       {/* Tabs & Search Filter Bar */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between pt-2">
         {/* Navigation Tabs */}
-        <div className="flex gap-2 p-1 bg-surface-100/80 dark:bg-surface-800/80 rounded-xl border border-surface-200/60 dark:border-surface-700/60 w-full md:w-auto">
+        <div className="flex gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-900/60 backdrop-blur-md rounded-xl border border-black/5 dark:border-white/10 w-full md:w-auto">
           <button
             onClick={() => setActiveTab('tasks')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
@@ -394,14 +395,16 @@ export default function Notifications() {
         </div>
       ) : activeTab === 'tasks' ? (
         /* Actionable Tasks List */
-        <div className="card overflow-hidden">
+        <div className="glass-card border border-white/40 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl">
           <div className="divide-y divide-surface-100 dark:divide-surface-800">
             {actionableList.length === 0 ? (
-              <div className="p-12 text-center text-surface-500 dark:text-surface-400">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2 opacity-80" />
-                <p className="font-semibold text-sm">All caught up!</p>
-                <p className="text-xs text-surface-400 mt-1">No pending actionable tasks found for this category.</p>
-              </div>
+              <EmptyState
+                icon={CheckCircle2}
+                title="All caught up!"
+                description="No pending actionable tasks found for this category."
+                actionText={activeCategory !== 'all' ? "Show All Categories" : undefined}
+                onAction={activeCategory !== 'all' ? () => setActiveCategory('all') : undefined}
+              />
             ) : (
               actionableList.map((item) => (
                 <div
@@ -454,12 +457,16 @@ export default function Notifications() {
         </div>
       ) : (
         /* System Notifications Logs */
-        <div className="card overflow-hidden">
+        <div className="glass-card border border-white/40 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl">
           <div className="divide-y divide-surface-100 dark:divide-surface-800">
             {filteredNotifications.length === 0 ? (
-              <div className="p-12 text-center text-surface-500 dark:text-surface-400">
-                No updates found.
-              </div>
+              <EmptyState
+                icon={Bell}
+                title="No updates found"
+                description={searchQuery ? "No system updates matched your search criteria." : "You have no system notifications or logs at this time."}
+                actionText={searchQuery ? "Clear Search" : undefined}
+                onAction={searchQuery ? () => setSearchQuery('') : undefined}
+              />
             ) : (
               filteredNotifications.map((notif) => (
                 <div

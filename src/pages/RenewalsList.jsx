@@ -16,6 +16,7 @@ import InvoiceDetailsModal from '../components/InvoiceDetailsModal';
 import IndianDateInput from '../components/IndianDateInput';
 import GlassSelect from '../components/GlassSelect';
 import GlassDatePicker from '../components/GlassDatePicker';
+import EmptyState from '../components/common/EmptyState';
 
 const normalizeHeader = (h) => {
   const clean = h.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1701,7 +1702,7 @@ export default function RenewalsList() {
   const isAllEmailStopped = renewals.length > 0 && renewals.every(r => r.stop_email);
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in pb-28">
       {/* Header Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -2051,9 +2052,9 @@ export default function RenewalsList() {
               {isAdmin && visibleCols.approvals && <col style={{ width: `${colWidths.approvals || 90}px` }} />}
               {visibleCols.bal && <col style={{ width: `${colWidths.bal || 110}px` }} />}
             </colgroup>
-            <thead className="bg-surface-100 dark:bg-surface-800 text-black dark:text-surface-300 font-bold border-b border-surface-200 dark:border-surface-700 sticky top-0 z-20 shadow-sm">
+            <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-950/95 text-slate-700 dark:text-slate-300 font-semibold border-b border-black/10 dark:border-white/10 shadow-sm">
               <tr>
-                <th className="w-8 px-1 py-1.5 text-center sticky top-0 z-20 bg-surface-100 dark:bg-surface-800">
+                <th className="w-8 px-1 py-1.5 text-center sticky top-0 z-20 bg-slate-100/95 dark:bg-slate-950/95 backdrop-blur-md">
                   <input 
                     type="checkbox"
                     checked={renewals.length > 0 && selectedIds.length === renewals.length}
@@ -2391,7 +2392,21 @@ export default function RenewalsList() {
               ) : sortedRenewals.length === 0 ? (
                 <tr>
                   <td colSpan={totalCols} className="px-6 py-12 text-center text-surface-500">
-                    No renewal records found matching your criteria.
+                    <EmptyState
+                      icon={Search}
+                      title="No renewal records found"
+                      description="No renewals match your current filter and search criteria. Try adjusting or clearing your filters."
+                      actionText="Reset Filters"
+                      onAction={() => {
+                        setSearch('');
+                        setSelectedService('all');
+                        setSelectedDateFilter('all');
+                        setSelectedStatus('all');
+                        setCustomStartDate('');
+                        setCustomEndDate('');
+                        setSearchParams(new URLSearchParams());
+                      }}
+                    />
                   </td>
                 </tr>
               ) : (

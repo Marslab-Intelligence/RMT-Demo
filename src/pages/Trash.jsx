@@ -5,6 +5,8 @@ import { Trash2, RotateCcw, ShieldAlert, ArrowLeft, RefreshCw, X, AlertTriangle,
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
+import EmptyState from '../components/common/EmptyState';
+import StatusBadge from '../components/common/StatusBadge';
 
 export default function Trash() {
   const { token, user } = useAuth();
@@ -141,7 +143,7 @@ export default function Trash() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300 pb-28">
       
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -173,8 +175,8 @@ export default function Trash() {
 
       {/* Bulk action selection bar */}
       {selectedIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/30 rounded-2xl gap-4 animate-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 dark:border-amber-900/50 backdrop-blur-xl rounded-2xl gap-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-2.5">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
               {selectedIds.length} {selectedIds.length === 1 ? 'record' : 'records'} selected
@@ -183,21 +185,21 @@ export default function Trash() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowBulkRestoreModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Restore Selected
             </button>
             <button
               onClick={() => setShowBulkDeleteModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-md transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-md shadow-rose-600/20 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Delete Forever
             </button>
             <button
               onClick={() => setSelectedIds([])}
-              className="px-3 py-2 text-xs text-surface-600 dark:text-surface-400 hover:bg-white/40 dark:hover:bg-white/5 rounded-xl border border-surface-200 dark:border-surface-800 transition-colors"
+              className="px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-white/40 dark:hover:bg-white/5 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors"
             >
               Cancel
             </button>
@@ -206,28 +208,26 @@ export default function Trash() {
       )}
 
       {/* Main content table card */}
-      <div className="card shadow-xl overflow-hidden">
+      <div className="glass-card border border-white/40 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
-            <p className="text-sm text-surface-500 dark:text-surface-400">Loading deleted records...</p>
+            <div className="animate-spin rounded-full h-9 w-9 border-2 border-brand-500 border-t-transparent"></div>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Loading deleted records...</p>
           </div>
         ) : trashData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center px-4">
-            <div className="w-16 h-16 rounded-full bg-brand-50 dark:bg-brand-950/20 flex items-center justify-center mb-4">
-              <Trash2 className="w-8 h-8 text-brand-500 dark:text-brand-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-1">Trash is empty</h3>
-            <p className="text-sm text-surface-500 dark:text-surface-400 max-w-sm">
-              Any records deleted by admin or sales team members will appear here.
-            </p>
-          </div>
+          <EmptyState
+            icon={Trash2}
+            title="Trash is empty"
+            description="Any records deleted by admin or sales team members will appear here."
+            actionText="Back to Renewals"
+            onAction={() => navigate('/renewals')}
+          />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-black/10 dark:border-white/10">
-                  <th className="px-6 py-4 w-12 text-center">
+              <thead className="sticky top-0 z-10 backdrop-blur-md bg-slate-100/90 dark:bg-slate-950/90 border-b border-black/10 dark:border-white/10">
+                <tr>
+                  <th className="px-6 py-3.5 w-12 text-center">
                     <div
                       onClick={() => {
                         if (trashData.length > 0 && selectedIds.length === trashData.length) {
@@ -256,12 +256,12 @@ export default function Trash() {
                       )}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">Unique ID</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">Client</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">Service</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">Renewal Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">Value</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400 text-right">Actions</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Unique ID</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Client</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Service</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Renewal Date</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Value</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/10">

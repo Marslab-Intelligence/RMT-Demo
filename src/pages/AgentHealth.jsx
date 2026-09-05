@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldAlert, AlertTriangle, CheckCircle2, RefreshCw, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from '../components/common/EmptyState';
 
 export default function AgentHealth() {
   const { getValidToken } = useAuth();
@@ -38,10 +39,10 @@ export default function AgentHealth() {
   }, []);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 rounded-2xl border border-rose-500/20 shadow-xl">
+    <div className="space-y-6 max-w-7xl mx-auto pb-28">
+      <div className="flex items-center justify-between glass-card p-6 rounded-2xl border border-rose-500/20 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-rose-500 to-amber-500 rounded-xl text-white shadow-lg">
+          <div className="p-3 bg-gradient-to-br from-rose-500 to-amber-500 rounded-xl text-white shadow-lg shadow-rose-500/20">
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
@@ -54,19 +55,26 @@ export default function AgentHealth() {
 
         <button
           onClick={fetchHealth}
-          className="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-rose-500/20 cursor-pointer"
+          className="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-rose-500/20 cursor-pointer shadow-sm"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Run Diagnostic Scan
         </button>
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-slate-500">Scanning database integrity...</div>
+        <div className="p-12 text-center text-slate-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-rose-500 border-t-transparent mx-auto mb-2"></div>
+          <p className="text-xs">Scanning database integrity...</p>
+        </div>
       ) : !healthData || healthData.findings.length === 0 ? (
-        <div className="p-12 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-2xl border border-emerald-500/30 text-center">
-          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-white">All Systems Clean</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Zero data integrity anomalies or security violations detected.</p>
+        <div className="glass-card rounded-2xl border border-white/40 dark:border-white/10 shadow-lg p-6">
+          <EmptyState
+            icon={CheckCircle2}
+            title="All Systems Clean"
+            description="Zero data integrity anomalies or security violations detected."
+            actionText="Run Diagnostic Scan"
+            onAction={fetchHealth}
+          />
         </div>
       ) : (
         <div className="grid gap-4">

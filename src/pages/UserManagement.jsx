@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Users, Plus, X, Loader2, Trash2 } from 'lucide-react';
 import GlassSelect from '../components/GlassSelect';
+import StatusBadge from '../components/common/StatusBadge';
+import EmptyState from '../components/common/EmptyState';
 
 const GROUPS = [
   {
@@ -148,16 +150,22 @@ export default function UserManagement() {
   const activeByRole = (role) => users.filter(u => u.role === role);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center gap-3">
-          <Users className="w-7 h-7 text-brand-500" />
-          User Groups
-        </h1>
-        <p className="text-surface-500 dark:text-surface-400 mt-1 text-sm">
-          Manage role-based access groups. Each user belongs to exactly one group.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-xl border border-brand-500/20 shadow-sm">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">User Groups & Roles</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                Manage role-based access controls and team members across your organization.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Groups Grid */}
@@ -168,78 +176,86 @@ export default function UserManagement() {
           return (
             <div
               key={group.role}
-              className={`rounded-2xl border-2 ${group.border} ${group.lightBg} overflow-hidden`}
+              className="group/card relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl flex flex-col justify-between transition-all duration-300 hover:shadow-2xl"
             >
+              {/* Top Accent Bar */}
+              <div className="h-1 w-full" style={{ background: group.accent }} />
+
               {/* Group Header */}
-              <div className="px-5 py-4 flex items-start justify-between gap-3">
+              <div className="px-5 py-4 flex items-start justify-between gap-3 border-b border-slate-200/60 dark:border-white/10">
                 <div className="min-w-0">
-                  <h2 className="text-base font-bold text-surface-900 dark:text-white" style={{ color: group.accent }}>
-                    {group.label}
+                  <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span style={{ color: group.accent }}>{group.label}</span>
                   </h2>
-                  <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">{group.description}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{group.description}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full text-white ${group.badgeBg}`}>
-                    {active.length} active
-                  </span>
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <StatusBadge status={group.role} label={`${active.length} Active`} size="xs" />
                   <button
                     onClick={() => openAddModal(group.role)}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full text-white transition-opacity hover:opacity-80"
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl text-white transition-all hover:scale-105 active:scale-95 shadow-sm"
                     style={{ background: group.accent }}
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add
+                    <span>Add</span>
                   </button>
                 </div>
               </div>
 
               {/* Active Users */}
-              <div className="mx-4 mb-4 bg-white dark:bg-surface-800 rounded-xl border border-surface-200 dark:border-surface-700 divide-y divide-surface-100 dark:divide-surface-700 overflow-hidden">
-                {active.length === 0 ? (
-                  <p className="text-center text-xs text-surface-400 py-6">No active users in this group</p>
-                ) : (
-                  active.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-                      {/* Avatar */}
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                        style={{ background: u.avatar_color || '#6366f1' }}
-                      >
-                        {getInitials(u.full_name)}
+              <div className="p-4 flex-1">
+                <div className="bg-white/60 dark:bg-slate-950/40 rounded-xl border border-slate-200/60 dark:border-white/5 divide-y divide-slate-200/40 dark:divide-white/5 overflow-hidden">
+                  {active.length === 0 ? (
+                    <EmptyState
+                      icon={Users}
+                      title="No active users"
+                      description="No users currently assigned to this role group."
+                      compact={true}
+                    />
+                  ) : (
+                    active.map(u => (
+                      <div key={u.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
+                        {/* Avatar */}
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0 shadow-md ring-2 ring-white/20"
+                          style={{ background: u.avatar_color || '#4f91a8' }}
+                        >
+                          {getInitials(u.full_name)}
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{u.full_name}</p>
+                          <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
+                        </div>
+                        {/* Role Select */}
+                        <div className="relative flex-shrink-0">
+                          {changingRole[u.id] ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                          ) : (
+                            <GlassSelect
+                              value={u.role}
+                              onChange={(e, val) => handleRoleChange(u.id, val !== undefined ? val : e.target.value, u.full_name)}
+                              disabled={u.id === user?.id}
+                              size="xs"
+                              options={[
+                                { value: 'sales', label: 'CST / Sales' },
+                                { value: 'admin', label: 'Admin' },
+                              ]}
+                            />
+                          )}
+                        </div>
+                        {/* Remove */}
+                        <button
+                          onClick={() => handleRemove(u.id, u.full_name)}
+                          disabled={removing[u.id] || u.id === user?.id}
+                          className="flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {removing[u.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Remove'}
+                        </button>
                       </div>
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{u.full_name}</p>
-                        <p className="text-xs text-surface-500 dark:text-surface-400 truncate">{u.email}</p>
-                      </div>
-                      {/* Role Select */}
-                      <div className="relative flex-shrink-0">
-                        {changingRole[u.id] ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-surface-400" />
-                        ) : (
-                          <GlassSelect
-                            value={u.role}
-                            onChange={(e, val) => handleRoleChange(u.id, val !== undefined ? val : e.target.value, u.full_name)}
-                            disabled={u.id === user?.id}
-                            size="xs"
-                            options={[
-                              { value: 'sales', label: 'CST / Sales' },
-                              { value: 'admin', label: 'Admin' },
-                            ]}
-                          />
-                        )}
-                      </div>
-                      {/* Remove */}
-                      <button
-                        onClick={() => handleRemove(u.id, u.full_name)}
-                        disabled={removing[u.id] || u.id === user?.id}
-                        className="flex-shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {removing[u.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Remove'}
-                      </button>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -249,41 +265,41 @@ export default function UserManagement() {
       {/* Permanent Delete Confirmation Modal */}
       {deleteConfirm && createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
-          <div className="relative w-full max-w-sm bg-white dark:bg-surface-800 rounded-2xl shadow-2xl border border-red-200 dark:border-red-900 overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-5 border-b border-surface-100 dark:border-surface-700">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative w-full max-w-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-rose-500/30 overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-200/60 dark:border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-surface-900 dark:text-white">Permanently Delete User</h3>
-                <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">This action cannot be undone</p>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Delete User</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">This action cannot be undone</p>
               </div>
-              <button onClick={() => setDeleteConfirm(null)} className="ml-auto p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 text-surface-500">
+              <button onClick={() => setDeleteConfirm(null)} className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-6 py-5">
-              <p className="text-sm text-surface-700 dark:text-surface-300">
-                Are you sure you want to <span className="font-bold text-red-600 dark:text-red-400">permanently delete</span> <span className="font-semibold">{deleteConfirm.name}</span>?
+            <div className="px-6 py-5 space-y-2">
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                Are you sure you want to permanently delete <span className="font-bold text-slate-900 dark:text-white">{deleteConfirm.name}</span>?
               </p>
-              <p className="text-xs text-surface-500 dark:text-surface-400 mt-2">
-                This will remove the user completely from the database. They will not be able to log in and all their session data will be erased.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                This will completely remove the user record and revoke active session access.
               </p>
             </div>
             <div className="flex gap-3 px-6 pb-5">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-surface-200 dark:border-surface-600 text-surface-700 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
+                className="btn-secondary flex-1 py-2"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePermanentDelete}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center justify-center gap-2"
+                className="btn-danger flex-1 py-2 flex items-center justify-center gap-1.5"
               >
                 <Trash2 className="w-4 h-4" />
-                Yes, Delete Permanently
+                <span>Delete</span>
               </button>
             </div>
           </div>
@@ -294,17 +310,17 @@ export default function UserManagement() {
       {/* Add User Modal */}
       {addModal && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAddModal(null)} />
-          <div className="relative w-full max-w-md bg-white dark:bg-surface-800 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-700 overflow-hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setAddModal(null)} />
+          <div className="relative w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200/80 dark:border-white/15 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100 dark:border-surface-700">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/60 dark:border-white/10">
               <div>
-                <h3 className="text-base font-bold text-surface-900 dark:text-white">Add User</h3>
-                <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
-                  Adding to <span className="font-semibold">{ROLE_LABELS[addModal]}</span> group
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Add New Team Member</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Assigning to <span className="font-bold text-brand-600 dark:text-brand-400">{ROLE_LABELS[addModal]}</span>
                 </p>
               </div>
-              <button onClick={() => setAddModal(null)} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 text-surface-500">
+              <button onClick={() => setAddModal(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -312,38 +328,32 @@ export default function UserManagement() {
             {/* Modal Body */}
             <form onSubmit={handleAddUser} className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1.5">
-                  Full Name
-                </label>
+                <label className="label">Full Name</label>
                 <input
                   type="text"
                   value={form.full_name}
                   onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))}
-                  placeholder="Full Name"
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                  placeholder="e.g. Sameerul Rahman"
+                  className="input-field"
                   required
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1.5">
-                  Email Address
-                </label>
+                <label className="label">Email Address</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                  placeholder="Email Address"
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                  placeholder="name@company.com"
+                  className="input-field"
                   required
                 />
-                <p className="text-[11px] text-surface-400 mt-1.5">
-                  The user will log in with this email and their password.
+                <p className="text-[11px] text-slate-400 mt-1">
+                  The user will log in with this email and their initial password.
                 </p>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1.5">
-                  Role / Group
-                </label>
+                <label className="label">Role / Group</label>
                 <GlassSelect
                   value={form.role}
                   onChange={(e, val) => setForm(p => ({ ...p, role: val !== undefined ? val : e.target.value }))}
@@ -357,21 +367,21 @@ export default function UserManagement() {
                 />
               </div>
 
-              <div className="flex gap-3 pt-1">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setAddModal(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-surface-200 dark:border-surface-600 text-sm font-medium text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-700 transition-colors"
+                  className="btn-secondary flex-1 py-2.5"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="btn-primary flex-1 py-2.5 flex items-center justify-center gap-2"
                 >
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {submitting ? 'Adding…' : 'Add User'}
+                  <span>{submitting ? 'Adding…' : 'Add User'}</span>
                 </button>
               </div>
             </form>

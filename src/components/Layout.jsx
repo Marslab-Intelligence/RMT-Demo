@@ -529,24 +529,40 @@ export default function Layout({ children }) {
     navigate('/login');
   };
 
-  const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Renewals', path: '/renewals', icon: FileText },
-    { name: 'Pricing', path: '/pricing', icon: Tag },
-    { name: 'Notification Center', path: '/notifications', icon: Bell },
-    { name: 'Approval Inbox', path: '/approval-inbox', icon: ShieldCheck },
-    { name: 'Email Automation', path: '/automation', icon: Mail },
-    { name: user?.role === 'admin' ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
-    { name: 'Record Details', path: '/edits-history', icon: History },
+  const navSections = [
+    {
+      label: null, // No label for primary section
+      items: [
+        { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+        { name: 'Renewals', path: '/renewals', icon: FileText },
+        { name: 'Pricing', path: '/pricing', icon: Tag },
+      ],
+    },
+    {
+      label: 'Communication',
+      items: [
+        { name: 'Notifications', path: '/notifications', icon: Bell },
+        { name: 'Approval Inbox', path: '/approval-inbox', icon: ShieldCheck },
+        { name: 'Email Automation', path: '/automation', icon: Mail },
+      ],
+    },
+    {
+      label: 'Analytics',
+      items: [
+        { name: user?.role === 'admin' ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
+        { name: 'Record Details', path: '/edits-history', icon: History },
+        { name: 'Visit Tracking', path: '/visits', icon: MapPin },
+      ],
+    },
+    ...(user?.role === 'admin' ? [{
+      label: 'Administration',
+      items: [
+        { name: 'Guardian Health', path: '/agent-health', icon: ShieldAlert },
+        { name: 'User Management', path: '/admin/users', icon: Users },
+        { name: 'Trash Data', path: '/trash', icon: Trash2 },
+      ],
+    }] : []),
   ];
-
-  if (user?.role === 'admin') {
-    navItems.push({ name: 'Guardian Health', path: '/agent-health', icon: ShieldAlert });
-    navItems.push({ name: 'Trash Data', path: '/trash', icon: Trash2 });
-    navItems.push({ name: 'User Management', path: '/admin/users', icon: Users });
-  }
-
-  navItems.push({ name: 'Client Visit Tracking', path: '/visits', icon: MapPin });
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
@@ -614,23 +630,34 @@ export default function Layout({ children }) {
  
       <div
         ref={sidebarRef}
-        className={`flex flex-col w-64 flex-shrink-0 fixed inset-y-0 left-0 z-30 transform-gpu transition-transform duration-300 ease-in-out backdrop-blur-xl border-r ${
-          isSidebarPinned
-            ? 'bg-[#f8f0e6]/80 dark:bg-[#14101e]/85'
-            : 'bg-[#ebd7c3]/20 dark:bg-[#0f0c16]/25'
-        } border-stone-300/30 dark:border-white/10 ${
+        className={`flex flex-col w-[268px] flex-shrink-0 fixed inset-y-0 left-0 z-30 transform-gpu transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isSidebarPinned || isHoveredSidebar || isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
+        style={{
+          background: 'var(--sidebar-bg)',
+          backdropFilter: 'blur(40px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          borderRight: '1px solid var(--sidebar-border)',
+        }}
       >
-        <div className="flex items-center justify-between h-14 px-4 flex-shrink-0 border-b border-stone-300/30 dark:border-white/10">
+        {/* ── Sidebar Header / Logo ── */}
+        <div className="flex items-center justify-between h-16 px-5 flex-shrink-0"
+          style={{
+            borderBottom: '1px solid var(--sidebar-border)',
+          }}
+        >
           <div 
             onClick={() => navigate('/')} 
-            className="flex items-center cursor-pointer transition-opacity hover:opacity-85 select-none"
+            className="flex items-center gap-2.5 cursor-pointer group select-none"
             title="MarsLab Dashboard"
           >
-            <img src="/logo.png" alt="MarsLab Logo" className="h-7 w-auto object-contain dark:invert dark:hue-rotate-180" />
+            <img 
+              src="/logo.png" 
+              alt="MarsLab Logo" 
+              className="h-7 w-auto object-contain dark:invert dark:hue-rotate-180 transition-transform duration-300 group-hover:scale-105" 
+            />
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -640,66 +667,89 @@ export default function Layout({ children }) {
                 localStorage.setItem('sidebar_pinned', String(newVal));
               }}
               title={isSidebarPinned ? 'Unpin Sidebar' : 'Pin Sidebar'}
-              className={`hidden lg:flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-200 border cursor-pointer ${
+              className={`hidden lg:flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-250 border cursor-pointer ${
                 isSidebarPinned
-                  ? 'bg-brand-500/15 border-brand-500/30 text-brand-600 dark:text-brand-400 shadow-sm'
-                  : 'bg-black/[0.03] dark:bg-white/[0.04] border-black/[0.06] dark:border-white/[0.08] text-stone-400 dark:text-gray-400 hover:text-stone-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.08]'
+                  ? 'sidebar-pin-active'
+                  : 'sidebar-pin-inactive'
               }`}
             >
               <Pin 
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${isSidebarPinned ? 'rotate-45 text-brand-500 fill-brand-500' : '-rotate-45'}`} 
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${isSidebarPinned ? 'rotate-45' : '-rotate-45'}`} 
               />
             </button>
             <button
               onClick={() => setIsMobileMenuOpen(false)}
-              className="lg:hidden p-1 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors"
+              className="lg:hidden p-1.5 rounded-xl text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3.5">
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.name}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? 'bg-white/45 dark:bg-black/45 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-900 dark:text-white shadow-sm'
-                        : 'text-stone-700 dark:text-gray-400 hover:bg-stone-300/30 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white border border-transparent'
-                    }`
-                  }
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {({ isActive }) => (
-                    <>
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-gray-900 dark:text-white' : 'text-stone-600 dark:text-gray-400'}`} />
-                      <span>{item.name}</span>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
-          </nav>
+        {/* ── Navigation ── */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 sidebar-scroll">
+          {navSections.map((section, sIdx) => (
+            <div key={sIdx} className={sIdx > 0 ? 'mt-5' : ''}>
+              {section.label && (
+                <div className="px-3 mb-2 flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400/80 dark:text-gray-500">
+                    {section.label}
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-stone-300/40 to-transparent dark:from-white/10 dark:to-transparent" />
+                </div>
+              )}
+              <nav className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.name}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `sidebar-nav-item group ${isActive ? 'sidebar-nav-active' : 'sidebar-nav-inactive'}`
+                      }
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {/* Active accent bar */}
+                          <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300 ${
+                            isActive ? 'h-5 bg-brand-500 dark:bg-brand-400 shadow-[0_0_8px_rgba(var(--brand-rgb),0.4)]' : 'h-0 bg-transparent'
+                          }`} />
+                          <div className={`sidebar-nav-icon ${isActive ? 'sidebar-nav-icon-active' : ''}`}>
+                            <Icon className="w-[18px] h-[18px]" />
+                          </div>
+                          <span className={`text-[13px] font-medium transition-colors duration-200 ${
+                            isActive ? 'text-gray-900 dark:text-white' : 'text-stone-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
+                          }`}>
+                            {item.name}
+                          </span>
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </nav>
+            </div>
+          ))}
         </div>
 
-        {/* Sidebar Footer — App Version */}
-        <div className="p-3 px-5 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-xs text-surface-400">
-          <span className="font-semibold tracking-wider text-[11px] uppercase">System Version</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-            v{APP_VERSION}
-          </span>
+        {/* ── Sidebar Footer ── */}
+        <div className="sidebar-footer">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 dark:text-gray-500">
+              System
+            </span>
+            <span className="sidebar-version-badge">
+              v{APP_VERSION}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div 
-        className={`flex-1 flex flex-col min-w-0 overflow-hidden transform-gpu transition-[padding-left] duration-300 ease-in-out ${(isSidebarPinned || isHoveredSidebar) ? 'lg:pl-64' : 'lg:pl-0'}`} 
+        className={`flex-1 flex flex-col min-w-0 overflow-hidden transform-gpu transition-[padding-left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${(isSidebarPinned || isHoveredSidebar) ? 'lg:pl-[268px]' : 'lg:pl-0'}`} 
         style={{ position: 'relative' }}
       >
         {/* Top Header */}

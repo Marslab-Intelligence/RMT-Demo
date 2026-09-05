@@ -13,7 +13,7 @@ import {
   Layers, Building2, ChevronRight, ChevronDown, PieChart as PieIcon, ExternalLink, Calendar, Shield, ShieldAlert, ArrowRight, XCircle
 } from 'lucide-react';
 import { formatCurrency, formatCompactCurrency, formatDateTime } from '../utils/formatters';
-import ThreeDGraph from '../components/ThreeDGraph';
+import MetricCard from '../components/common/MetricCard';
 import AreaGraphVisualizer from '../components/AreaGraphVisualizer';
 import ServiceDistributionPieChart from '../components/ServiceDistributionPieChart';
 import ClientDetailsModal from '../components/ClientDetailsModal';
@@ -440,7 +440,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in relative pb-12">
+    <div className="space-y-8 animate-fade-in relative pb-28">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 dark:bg-gradient-to-r dark:from-slate-900/90 dark:via-indigo-950/80 dark:to-slate-900/90 p-6 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xl dark:shadow-2xl backdrop-blur-xl transition-all">
         <div>
           <div className="flex items-center gap-3">
@@ -456,71 +456,49 @@ export default function Reports() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div onClick={() => openModal('active_kpi')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-blue-500/15 via-blue-400/10 to-blue-500/5 dark:from-blue-950/40 dark:via-blue-900/30 dark:to-slate-900/60 border-blue-400/50 dark:border-blue-500/40 shadow-lg shadow-blue-500/5 hover:border-blue-500/80 hover:shadow-blue-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-500/40 flex-shrink-0 backdrop-blur-md">
-            <Users className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Active Portfolio</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{stats?.active || 0} <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Services</span></p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
-
-        <div onClick={() => openModal('pending_kpi')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-amber-500/15 via-orange-400/10 to-amber-500/5 dark:from-amber-950/40 dark:via-orange-900/30 dark:to-slate-900/60 border-amber-400/50 dark:border-amber-500/40 shadow-lg shadow-amber-500/5 hover:border-amber-500/80 hover:shadow-amber-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 flex-shrink-0 backdrop-blur-md">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Pending Reminders</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{stats?.upcoming || 0} <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Upcoming</span></p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
-
-        <div onClick={() => openModal('deliverability_kpi')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-cyan-500/15 via-teal-400/10 to-cyan-500/5 dark:from-cyan-950/40 dark:via-teal-900/30 dark:to-slate-900/60 border-cyan-400/50 dark:border-cyan-500/40 shadow-lg shadow-cyan-500/5 hover:border-cyan-500/80 hover:shadow-cyan-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 flex-shrink-0 backdrop-blur-md">
-            <Mail className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Email Deliverability</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{deliverabilityRate}% <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Success</span></p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
-
-        <div onClick={() => openModal('pipeline_kpi')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-indigo-500/15 via-purple-400/10 to-indigo-500/5 dark:from-indigo-950/40 dark:via-purple-900/30 dark:to-slate-900/60 border-indigo-400/50 dark:border-indigo-500/40 shadow-lg shadow-indigo-500/5 hover:border-indigo-500/80 hover:shadow-indigo-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 border border-indigo-500/40 flex-shrink-0 backdrop-blur-md">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Total Contract Pipeline</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{formatCurrency(stats?.revenue || 0)}</p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
-
-        <div onClick={() => openModal('profit')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-emerald-500/15 via-teal-400/10 to-emerald-500/5 dark:from-emerald-950/40 dark:via-teal-900/30 dark:to-slate-900/60 border-emerald-400/50 dark:border-emerald-500/40 shadow-lg shadow-emerald-500/5 hover:border-emerald-500/80 hover:shadow-emerald-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 flex-shrink-0 backdrop-blur-md">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Total Profit</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{formatCurrency(stats?.profit || 0)}</p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
-
-        <div onClick={() => openModal('loss')} className="p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 relative overflow-hidden group flex items-center gap-3.5 bg-gradient-to-br from-rose-500/15 via-red-400/10 to-rose-500/5 dark:from-rose-950/40 dark:via-red-900/30 dark:to-slate-900/60 border-rose-400/50 dark:border-rose-500/40 shadow-lg shadow-rose-500/5 hover:border-rose-500/80 hover:shadow-rose-500/15 backdrop-blur-xl cursor-pointer">
-          <div className="p-3 rounded-xl bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40 flex-shrink-0 backdrop-blur-md">
-            <TrendingDown className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-700 dark:text-surface-400 uppercase tracking-wider truncate">Total Loss (Expired)</p>
-            <p className="text-lg font-black text-black dark:text-white mt-0.5 leading-none">{formatCurrency(stats?.loss || 0)}</p>
-          </div>
-          <Maximize2 className="w-3.5 h-3.5 text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-        </div>
+        <MetricCard
+          title="Active Portfolio"
+          value={`${stats?.active || 0} Services`}
+          icon={Users}
+          color="blue"
+          onClick={() => openModal('active_kpi')}
+        />
+        <MetricCard
+          title="Pending Reminders"
+          value={`${stats?.upcoming || 0} Upcoming`}
+          icon={Clock}
+          color="amber"
+          onClick={() => openModal('pending_kpi')}
+        />
+        <MetricCard
+          title="Email Deliverability"
+          value={`${deliverabilityRate}%`}
+          subtext="Success"
+          icon={Mail}
+          color="cyan"
+          onClick={() => openModal('deliverability_kpi')}
+        />
+        <MetricCard
+          title="Total Contract Pipeline"
+          value={formatCurrency(stats?.revenue || 0)}
+          icon={TrendingUp}
+          color="purple"
+          onClick={() => openModal('pipeline_kpi')}
+        />
+        <MetricCard
+          title="Total Profit"
+          value={formatCurrency(stats?.profit || 0)}
+          icon={TrendingUp}
+          color="emerald"
+          onClick={() => openModal('profit')}
+        />
+        <MetricCard
+          title="Total Loss (Expired)"
+          value={formatCurrency(stats?.loss || 0)}
+          icon={TrendingDown}
+          color="rose"
+          onClick={() => openModal('loss')}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -609,39 +587,39 @@ export default function Reports() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/email-automation')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-white/10 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/70 dark:bg-white/10 hover:bg-white/95 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200/80 dark:border-white/15 transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] backdrop-blur-md"
               >
                 <Mail className="w-3.5 h-3.5 text-cyan-500" />
-                Email Settings
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>Email Settings</span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-60" />
               </button>
               <button
                 onClick={() => navigate('/activity-logs')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-white/10 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/70 dark:bg-white/10 hover:bg-white/95 dark:hover:bg-white/20 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200/80 dark:border-white/15 transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] backdrop-blur-md"
               >
                 <Activity className="w-3.5 h-3.5 text-brand-500" />
-                All Activity Logs
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>All Activity Logs</span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-60" />
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 1. Outbound Email Logs Panel */}
-            <div className="group/animated-card relative overflow-hidden rounded-2xl border border-slate-200/60 dark:border-white/15 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl p-5 flex flex-col justify-between transition-all duration-500 hover:border-indigo-500/40">
+            <div className="group/animated-card relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/15 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-cyan-500/40">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/60 dark:border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shadow-sm">
                     <Mail className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                       Outbound Email Logs
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
                         {filteredEmailLogs.length}
                       </span>
                     </h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Automated client renewal notifications</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Automated client renewal notifications</p>
                   </div>
                 </div>
 
@@ -662,65 +640,78 @@ export default function Reports() {
                   </div>
 
                   {/* Search */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                  <div className="relative group/search">
+                    <Search className="w-3.5 h-3.5 text-slate-400 group-focus-within/search:text-cyan-500 absolute left-2.5 top-2.5 transition-colors" />
                     <input
                       type="text"
                       value={emailLogSearch}
                       onChange={(e) => setEmailLogSearch(e.target.value)}
                       placeholder="Search emails..."
-                      className="pl-8 pr-3 py-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/15 rounded-lg text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500 w-28 sm:w-36"
+                      className="pl-8 pr-6 py-1.5 bg-white/60 dark:bg-slate-950/70 border border-slate-200/80 dark:border-white/15 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/60 w-32 sm:w-40 focus:w-44 sm:focus:w-52 transition-all duration-300 shadow-sm"
                     />
+                    {emailLogSearch && (
+                      <button
+                        onClick={() => setEmailLogSearch('')}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3 overflow-y-auto custom-scrollbar max-h-[360px] rounded-xl border border-slate-200/60 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/40">
                 {filteredEmailLogs.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">
-                    No email logs match your search or filter.
+                  <div className="p-10 flex flex-col items-center justify-center text-center">
+                    <div className="p-3 rounded-2xl bg-cyan-500/10 text-cyan-500 mb-2 border border-cyan-500/20">
+                      <Mail className="w-5 h-5 opacity-80" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No outbound email logs found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search terms or filter</p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-white/10 uppercase text-[10px] font-semibold sticky top-0 backdrop-blur-md">
+                    <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-white/10 uppercase text-[10px] font-black sticky top-0 backdrop-blur-md">
                       <tr>
-                        <th className="px-3 py-2">Sent Time</th>
-                        <th className="px-3 py-2">Client / Service</th>
-                        <th className="px-3 py-2">Email Type</th>
-                        <th className="px-3 py-2 text-right">Status</th>
+                        <th className="px-3.5 py-2.5">Sent Time</th>
+                        <th className="px-3.5 py-2.5">Client / Service</th>
+                        <th className="px-3.5 py-2.5">Email Type</th>
+                        <th className="px-3.5 py-2.5 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-slate-700 dark:text-slate-200">
                       {filteredEmailLogs.map((log) => {
                         const badge = formatEmailTypeBadge(log.email_type);
+                        const isSent = log.status === 'sent';
                         return (
-                          <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 dark:text-slate-400 text-[11px]">
+                          <tr key={log.id} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
+                            <td className="px-3.5 py-3 whitespace-nowrap text-slate-500 dark:text-slate-400 text-[11px] font-mono">
                               {formatDateTime(log.sent_at)}
                             </td>
-                            <td className="px-3 py-2.5 max-w-[160px] truncate">
+                            <td className="px-3.5 py-3 max-w-[160px] truncate">
                               <div className="font-bold text-slate-900 dark:text-white truncate">{log.client_name || 'System'}</div>
                               {log.recipient_email && (
                                 <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{log.recipient_email}</div>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3.5 py-3 whitespace-nowrap">
                               <span
-                                className={`px-2.5 py-1 rounded text-[11px] font-black border ${badge.color}`}
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${badge.color}`}
                                 style={badge.style}
                               >
                                 {badge.label}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                            <td className="px-3.5 py-3 text-right whitespace-nowrap">
                               <span
-                                className="inline-block px-2.5 py-1 rounded-full text-[10px] font-black border"
-                                style={
-                                  log.status === 'sent'
-                                    ? { backgroundColor: '#dcfce7', color: '#013220', borderColor: '#16a34a', fontWeight: '900' }
-                                    : { backgroundColor: '#fee2e2', color: '#450a0a', borderColor: '#ef4444', fontWeight: '900' }
-                                }
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border backdrop-blur-md ${
+                                  isSent
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                    : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                }`}
                               >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSent ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                 {log.status ? log.status.toUpperCase() : 'SENT'}
                               </span>
                             </td>
@@ -734,20 +725,20 @@ export default function Reports() {
             </div>
 
             {/* 2. System Audit Logs Panel */}
-            <div className="group/animated-card relative overflow-hidden rounded-2xl border border-slate-200/60 dark:border-white/15 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl p-5 flex flex-col justify-between transition-all duration-500 hover:border-brand-500/40">
+            <div className="group/animated-card relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/15 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl shadow-xl p-5 flex flex-col justify-between transition-all duration-300 hover:border-brand-500/40">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/60 dark:border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 shadow-sm">
                     <Activity className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                       System Audit Logs
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-brand-500/15 text-brand-700 dark:text-brand-300 border border-brand-500/30">
                         {filteredAuditLogs.length}
                       </span>
                     </h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">User actions & record change tracking</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">User actions & record change tracking</p>
                   </div>
                 </div>
 
@@ -767,50 +758,69 @@ export default function Reports() {
                   </div>
 
                   {/* Search */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                  <div className="relative group/search">
+                    <Search className="w-3.5 h-3.5 text-slate-400 group-focus-within/search:text-brand-500 absolute left-2.5 top-2.5 transition-colors" />
                     <input
                       type="text"
                       value={auditLogSearch}
                       onChange={(e) => setAuditLogSearch(e.target.value)}
                       placeholder="Search activity..."
-                      className="pl-8 pr-3 py-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/15 rounded-lg text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-500 w-28 sm:w-36"
+                      className="pl-8 pr-6 py-1.5 bg-white/60 dark:bg-slate-950/70 border border-slate-200/80 dark:border-white/15 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/60 w-32 sm:w-40 focus:w-44 sm:focus:w-52 transition-all duration-300 shadow-sm"
                     />
+                    {auditLogSearch && (
+                      <button
+                        onClick={() => setAuditLogSearch('')}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3 overflow-y-auto custom-scrollbar max-h-[360px] rounded-xl border border-slate-200/60 dark:border-white/10 bg-slate-50/50 dark:bg-slate-950/40">
                 {filteredAuditLogs.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">
-                    No activity logs match your search or role filter.
+                  <div className="p-10 flex flex-col items-center justify-center text-center">
+                    <div className="p-3 rounded-2xl bg-brand-500/10 text-brand-500 mb-2 border border-brand-500/20">
+                      <Activity className="w-5 h-5 opacity-80" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No activity logs match your search or role filter</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search query or selecting All Roles</p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-white/10 uppercase text-[10px] font-semibold sticky top-0 backdrop-blur-md">
+                    <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-white/10 uppercase text-[10px] font-black sticky top-0 backdrop-blur-md">
                       <tr>
-                        <th className="px-3 py-2">Timestamp</th>
-                        <th className="px-3 py-2">User / Role</th>
-                        <th className="px-3 py-2">Action Details</th>
+                        <th className="px-3.5 py-2.5">Timestamp</th>
+                        <th className="px-3.5 py-2.5">User / Role</th>
+                        <th className="px-3.5 py-2.5">Action Details</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-slate-700 dark:text-slate-200">
-                      {filteredAuditLogs.map((log) => (
-                        <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors">
-                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 dark:text-slate-400 text-[11px]">
-                            {formatDateTime(log.created_at)}
-                          </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <div className="font-bold text-slate-900 dark:text-white">{log.full_name || 'System User'}</div>
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 uppercase">
-                              {log.role || 'user'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
-                            {log.details}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredAuditLogs.map((log) => {
+                        const isAdmin = log.role === 'admin';
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
+                            <td className="px-3.5 py-3 whitespace-nowrap text-slate-500 dark:text-slate-400 text-[11px] font-mono">
+                              {formatDateTime(log.created_at)}
+                            </td>
+                            <td className="px-3.5 py-3 whitespace-nowrap">
+                              <div className="font-bold text-slate-900 dark:text-white">{log.full_name || 'System User'}</div>
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border mt-0.5 ${
+                                isAdmin
+                                  ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                                  : 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30'
+                              }`}>
+                                {log.role || 'user'}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-3 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                              {log.details}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}

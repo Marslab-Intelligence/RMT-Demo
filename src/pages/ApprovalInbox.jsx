@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Mail, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from '../components/common/EmptyState';
 
 export default function ApprovalInbox() {
   const { getValidToken } = useAuth();
@@ -62,10 +63,10 @@ export default function ApprovalInbox() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+    <div className="space-y-6 max-w-7xl mx-auto pb-28">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-card p-6 rounded-2xl border border-amber-500/20 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-amber-500 to-rose-500 rounded-xl text-white shadow-lg">
+          <div className="p-3 bg-gradient-to-br from-amber-500 to-rose-500 rounded-xl text-white shadow-lg shadow-amber-500/20">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
@@ -79,19 +80,19 @@ export default function ApprovalInbox() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setFilter('pending')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filter === 'pending' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filter === 'pending' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
           >
             Pending Approval ({episodes.length})
           </button>
           <button
             onClick={() => setFilter('approved')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filter === 'approved' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filter === 'approved' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
           >
             Approved
           </button>
           <button
             onClick={fetchEpisodes}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -99,12 +100,19 @@ export default function ApprovalInbox() {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-slate-500">Loading inbox items...</div>
+        <div className="p-12 text-center text-slate-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-amber-500 border-t-transparent mx-auto mb-2"></div>
+          <p className="text-xs">Loading inbox items...</p>
+        </div>
       ) : episodes.length === 0 ? (
-        <div className="p-12 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
-          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3 opacity-60" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-white">Inbox Clean</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">No items currently requiring human approval.</p>
+        <div className="glass-card rounded-2xl border border-white/40 dark:border-white/10 shadow-lg p-6">
+          <EmptyState
+            icon={CheckCircle2}
+            title="Inbox Clean"
+            description="No items currently requiring human approval."
+            actionText="Refresh Inbox"
+            onAction={fetchEpisodes}
+          />
         </div>
       ) : (
         <div className="grid gap-4">

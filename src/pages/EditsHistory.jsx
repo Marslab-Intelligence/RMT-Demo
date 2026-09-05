@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { History, User, Calendar, Edit, ArrowRight, Shield, RefreshCw, PlusCircle, CheckCircle, X, Download, Tag, Mail, CalendarClock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate, formatDateTime, getStatusColor } from '../utils/formatters';
+import EmptyState from '../components/common/EmptyState';
 
 export default function EditsHistory() {
   const { token, user } = useAuth();
@@ -371,51 +372,62 @@ export default function EditsHistory() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-16">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center gap-2">
-            <History className="w-6 h-6 text-brand-500" /> Record Details
-          </h1>
-          <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-            Complete audit logs of all changes, creations, and renewals across all records. Click any record to view details & download report.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-xl border border-brand-500/20 shadow-sm">
+              <History className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Record Audit History</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                Complete audit trail of all changes, creations, and renewals. Click any record to view details & download report.
+              </p>
+            </div>
+          </div>
         </div>
         <button 
           onClick={fetchLogs} 
           disabled={loading}
-          className="btn-secondary p-2 flex items-center gap-2 text-xs"
+          className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh</span>
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden border-slate-200/80 dark:border-white/10 shadow-xl">
         <div className="max-h-[700px] overflow-y-auto custom-scrollbar relative">
           <table className="w-full text-left text-xs table-fixed">
-            <thead className="bg-surface-50 dark:bg-surface-900 text-surface-500 dark:text-surface-400 border-b border-surface-200 dark:border-surface-700 sticky top-0 z-10 shadow-sm">
+            <thead className="bg-slate-100/90 dark:bg-slate-950/90 text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-white/10 sticky top-0 z-10 backdrop-blur-md uppercase text-[10px] font-black">
               <tr>
-                <th className="px-3 py-1.5 font-medium w-[12%]">Unique ID</th>
-                <th className="px-3 py-1.5 font-medium w-[22%]">Record Details</th>
-                <th className="px-3 py-1.5 font-medium w-[18%]">Performed By</th>
-                <th className="px-3 py-1.5 font-medium w-[14%]">Action At</th>
-                <th className="px-3 py-1.5 font-medium w-[34%]">Changes Description</th>
+                <th className="px-3.5 py-2.5 w-[12%]">Unique ID</th>
+                <th className="px-3.5 py-2.5 w-[22%]">Record Details</th>
+                <th className="px-3.5 py-2.5 w-[18%]">Performed By</th>
+                <th className="px-3.5 py-2.5 w-[14%]">Action At</th>
+                <th className="px-3.5 py-2.5 w-[34%]">Changes Description</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
+            <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-slate-700 dark:text-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-surface-500">
+                  <td colSpan="5" className="px-6 py-16 text-center text-slate-400">
                     <div className="flex justify-center mb-2">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
+                      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-500"></div>
                     </div>
-                    Loading audit history...
+                    <span className="text-xs font-medium">Loading audit history...</span>
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-surface-500">
-                    No history logs found.
+                  <td colSpan="5" className="p-4">
+                    <EmptyState
+                      icon={History}
+                      title="No history logs found"
+                      description="No modification or creation logs recorded yet."
+                      compact={true}
+                    />
                   </td>
                 </tr>
               ) : (

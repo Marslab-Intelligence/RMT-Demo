@@ -332,7 +332,7 @@ export default function Pricing() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
       
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

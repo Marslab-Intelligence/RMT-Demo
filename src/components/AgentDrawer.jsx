@@ -314,125 +314,223 @@ export default function AgentDrawer() {
       {/* Floating Action Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-bold px-4 py-3 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer border border-white/20"
+        className="fixed bottom-6 right-6 z-40 group"
+        style={{
+          background: 'linear-gradient(135deg, rgba(var(--brand-rgb), 0.9), rgba(var(--brand-rgb), 0.7))',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          borderRadius: '18px',
+          padding: '14px 20px',
+          boxShadow: '0 8px 32px rgba(var(--brand-rgb), 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          color: '#fff',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.03)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(var(--brand-rgb), 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.5)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 8px 32px rgba(var(--brand-rgb), 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.4)'; }}
       >
-        <Bot className="w-6 h-6 animate-pulse" />
-        <span className="text-xs tracking-wider uppercase font-extrabold hidden sm:inline">AI Agent</span>
+        <Bot className="w-5 h-5" />
+        <span className="text-[11px] tracking-wider uppercase font-bold hidden sm:inline">AI Agent</span>
       </button>
+
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[9989] bg-black/20 dark:bg-black/40 backdrop-blur-[2px] transition-opacity duration-300"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
 
       {/* Slide-out Drawer */}
       {isOpen && (
-        <div className="fixed inset-y-0 right-0 z-[9990] w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-l border-amber-500/20 shadow-2xl flex flex-col transition-all duration-300">
-          {/* Drawer Header */}
-          <div className="p-4 bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 text-white flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl">
-                <Bot className="w-5 h-5" />
+        <div
+          className="fixed inset-y-0 right-0 z-[9990] w-full max-w-[420px] flex flex-col"
+          style={{
+            background: 'var(--sidebar-bg)',
+            backdropFilter: 'blur(50px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(50px) saturate(190%)',
+            borderLeft: '1px solid var(--sidebar-border)',
+            boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.08)',
+            animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          {/* ── Drawer Header ── */}
+          <div
+            className="relative overflow-hidden flex-shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--brand-rgb), 0.15) 0%, rgba(var(--brand-rgb), 0.05) 100%)',
+              borderBottom: '1px solid var(--sidebar-border)',
+            }}
+          >
+            {/* Decorative gradient orb */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-30"
+              style={{ background: 'radial-gradient(circle, rgba(var(--brand-rgb), 0.4), transparent 70%)' }}
+            />
+            <div className="relative p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex items-center justify-center w-10 h-10 rounded-2xl"
+                  style={{
+                    background: 'rgba(var(--brand-rgb), 0.15)',
+                    border: '1px solid rgba(var(--brand-rgb), 0.25)',
+                    boxShadow: '0 0 16px rgba(var(--brand-rgb), 0.1)',
+                  }}
+                >
+                  <Bot className="w-5 h-5" style={{ color: 'rgb(var(--brand-rgb))' }} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white tracking-tight">
+                    RenewalPro AI
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-gray-500">
+                      Online • Autonomous
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-sm">RenewalPro AI Agent</h3>
-                <span className="text-[10px] text-amber-200 uppercase font-bold tracking-wider">v1.1.0 • Autonomous Watch</span>
-              </div>
-            </div>
 
-            <button
-              onClick={() => setIsOpen(false)}
-              className="p-1.5 hover:bg-white/20 rounded-xl transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="flex items-center justify-center w-8 h-8 rounded-xl transition-all cursor-pointer"
+                style={{
+                  background: 'rgba(0, 0, 0, 0.04)',
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
+              >
+                <X className="w-4 h-4 text-stone-500 dark:text-gray-400" />
+              </button>
+            </div>
           </div>
 
-          {/* AI Usage Indicator — the Gemini key is free-tier with a hard
-              20 requests/day cap. Without this visible, hitting it looked
-              like random, unexplained failures. */}
+          {/* ── AI Usage Indicator ── */}
           {usage && (
-            <div className={`px-4 py-2 border-b text-[11px] ${
-              usage.limitReached
-                ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900'
-                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800'
-            }`}>
+            <div
+              className="px-4 py-2.5 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--sidebar-border)' }}
+            >
               {usage.limitReached ? (
-                <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-semibold">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>
-                    Daily AI limit reached ({usage.requestsToday}/{usage.dailyRequestLimit}) — resumes ~{formatResetTime(usage.resetsAt)}.
-                    Basic lookups still work; AI-drafted answers will resume automatically.
+                <div className="flex items-center gap-2 text-[11px]">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-md bg-rose-500/10 flex-shrink-0">
+                    <AlertTriangle className="w-3 h-3 text-rose-500" />
+                  </div>
+                  <span className="text-rose-600 dark:text-rose-400 font-medium leading-snug">
+                    Daily limit reached ({usage.requestsToday}/{usage.dailyRequestLimit}) — resumes ~{formatResetTime(usage.resetsAt)}.
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-                    AI usage: {usage.requestsToday}/{usage.dailyRequestLimit}
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[10px] font-semibold text-stone-400 dark:text-gray-500 whitespace-nowrap uppercase tracking-wider">
+                    Usage
                   </span>
-                  <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden"
+                    style={{ background: 'rgba(0,0,0,0.06)' }}
+                  >
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        usage.requestsToday / usage.dailyRequestLimit >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(100, (usage.requestsToday / usage.dailyRequestLimit) * 100)}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, (usage.requestsToday / usage.dailyRequestLimit) * 100)}%`,
+                        background: usage.requestsToday / usage.dailyRequestLimit >= 0.7
+                          ? 'linear-gradient(90deg, #f59e0b, #ef4444)'
+                          : `linear-gradient(90deg, rgb(var(--brand-rgb)), rgba(var(--brand-rgb), 0.7))`,
+                      }}
                     />
                   </div>
+                  <span className="text-[10px] font-bold text-stone-500 dark:text-gray-400 tabular-nums">
+                    {usage.requestsToday}/{usage.dailyRequestLimit}
+                  </span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Quick Actions Bar */}
-          <div className="p-2 bg-slate-100 dark:bg-slate-950 flex items-center gap-2 overflow-x-auto text-[11px] font-semibold border-b border-slate-200 dark:border-slate-800">
+          {/* ── Quick Actions ── */}
+          <div
+            className="px-3 py-2.5 flex items-center gap-2 flex-shrink-0"
+            style={{ borderBottom: '1px solid var(--sidebar-border)' }}
+          >
             <button
               onClick={handleDailySweep}
               disabled={isProcessing}
-              className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 whitespace-nowrap cursor-pointer disabled:opacity-50"
+              className="agent-chip"
+              style={{
+                background: 'rgba(var(--brand-rgb), 0.08)',
+                border: '1px solid rgba(var(--brand-rgb), 0.15)',
+                color: 'rgb(var(--brand-rgb))',
+              }}
             >
-              ⚡ Daily Sweep
+              <Sparkles className="w-3 h-3" />
+              <span>Daily Sweep</span>
             </button>
             <button
               onClick={handleGuardianHealth}
               disabled={isProcessing}
-              className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 whitespace-nowrap cursor-pointer disabled:opacity-50"
+              className="agent-chip"
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.15)',
+                color: '#10b981',
+              }}
             >
-              🛡️ Guardian Health
+              <ShieldCheck className="w-3 h-3" />
+              <span>Guardian Health</span>
             </button>
           </div>
 
-          {/* Chat Messages Body */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3">
+          {/* ── Chat Messages ── */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-3 sidebar-scroll">
             {messages.map((m, idx) => (
               <div
                 key={idx}
                 className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-line ${
+                  className={`max-w-[85%] text-[13px] leading-relaxed whitespace-pre-line ${
                     m.sender === 'user'
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-br-none shadow-md font-medium'
-                      : 'bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-200 rounded-bl-none border border-slate-200/50 dark:border-slate-700/50'
+                      ? 'agent-bubble-user'
+                      : 'agent-bubble-agent'
                   }`}
                 >
                   {m.text}
 
                   {m.isMutationPreview && pendingMutation && (
-                    <div className="mt-3 p-3 bg-white dark:bg-slate-950 rounded-xl border border-amber-500/30 text-[11px] space-y-2 text-slate-800 dark:text-slate-200">
-                      <div className="font-bold text-amber-600 dark:text-amber-400">
+                    <div className="mt-3 p-3 rounded-xl text-[11px] space-y-2"
+                      style={{
+                        background: 'rgba(255,255,255,0.6)',
+                        border: '1px solid rgba(var(--brand-rgb), 0.2)',
+                        backdropFilter: 'blur(10px)',
+                      }}
+                    >
+                      <div className="font-bold" style={{ color: 'rgb(var(--brand-rgb))' }}>
                         Proposed Field Diff:
                       </div>
                       {pendingMutation.changes.map((c, i) => (
-                        <div key={i} className="font-mono bg-slate-50 dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-800">
-                          <span className="font-bold text-indigo-600">{c.field}:</span> {c.from || '(empty)'} ➔ <strong className="text-emerald-600">{c.to}</strong>
+                        <div key={i} className="font-mono p-1.5 rounded-lg text-gray-800 dark:text-gray-200"
+                          style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)' }}
+                        >
+                          <span className="font-bold" style={{ color: 'rgb(var(--brand-rgb))' }}>{c.field}:</span> {c.from || '(empty)'} ➔ <strong className="text-emerald-600">{c.to}</strong>
                         </div>
                       ))}
 
                       <div className="flex items-center gap-2 pt-2">
                         <button
                           onClick={handleConfirmMutation}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded-lg text-xs transition-all cursor-pointer"
+                          className="flex-1 py-1.5 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+                          style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
                         >
                           Confirm & Apply
                         </button>
                         <button
                           onClick={() => setPendingMutation(null)}
-                          className="px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-700 dark:text-slate-300 font-bold py-1.5 rounded-lg text-xs cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer text-stone-600 dark:text-gray-300"
+                          style={{ background: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}
                         >
                           Cancel
                         </button>
@@ -442,24 +540,46 @@ export default function AgentDrawer() {
                 </div>
               </div>
             ))}
+
+            {/* Typing indicator */}
+            {isProcessing && (
+              <div className="flex items-start">
+                <div className="agent-bubble-agent flex items-center gap-1.5 !py-3 !px-4">
+                  <span className="agent-typing-dot" style={{ animationDelay: '0ms' }} />
+                  <span className="agent-typing-dot" style={{ animationDelay: '150ms' }} />
+                  <span className="agent-typing-dot" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input Footer */}
-          <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md">
-            <div className="flex items-center gap-2">
+          {/* ── Chat Input Footer ── */}
+          <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid var(--sidebar-border)' }}>
+            <div
+              className="flex items-center gap-2 p-1.5 rounded-2xl"
+              style={{
+                background: 'rgba(0, 0, 0, 0.03)',
+                border: '1px solid rgba(0, 0, 0, 0.06)',
+              }}
+            >
               <input
                 type="text"
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Ask agent or type natural edit instruction..."
-                className="flex-1 bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-white placeholder-slate-400 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                placeholder="Ask the AI agent anything..."
+                className="flex-1 bg-transparent text-gray-800 dark:text-gray-100 placeholder-stone-400 dark:placeholder-gray-500 px-3 py-2 text-[13px] focus:outline-none"
               />
               <button
                 onClick={handleSendMessage}
                 disabled={isProcessing || !prompt.trim()}
-                className="bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-xl disabled:opacity-50 transition-all cursor-pointer"
+                className="flex items-center justify-center w-9 h-9 rounded-xl transition-all cursor-pointer disabled:opacity-30"
+                style={{
+                  background: `linear-gradient(135deg, rgb(var(--brand-rgb)), rgba(var(--brand-rgb), 0.8))`,
+                  boxShadow: '0 2px 8px rgba(var(--brand-rgb), 0.3)',
+                  color: '#fff',
+                }}
               >
                 <Send className="w-4 h-4" />
               </button>

@@ -8,6 +8,7 @@ import {
 import { formatCurrency, formatDate, getStatusColor, getDaysLeftColor } from '../utils/formatters';
 import toast from 'react-hot-toast';
 import RenewalForm from '../components/RenewalForm';
+import EmptyState from '../components/common/EmptyState';
 
 export default function ClientDetails() {
   const { id } = useParams();
@@ -105,19 +106,20 @@ export default function ClientDetails() {
 
   if (!client) {
     return (
-      <div className="text-center py-12 card max-w-lg mx-auto mt-8">
-        <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-surface-900 dark:text-white mb-2">Client Not Found</h2>
-        <p className="text-surface-500 dark:text-surface-400 mb-6">The requested renewal record could not be loaded.</p>
-        <button onClick={handleBack} className="btn-primary inline-flex items-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back to Renewals
-        </button>
+      <div className="max-w-md mx-auto mt-12">
+        <EmptyState
+          icon={AlertCircle}
+          title="Client Not Found"
+          description="The requested renewal record could not be loaded or may have been deleted."
+          actionText="Back to Renewals"
+          onAction={handleBack}
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+    <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pb-28">
       {/* Header / Navigation */}
       <div className="flex items-center justify-between">
         <button 
@@ -139,7 +141,7 @@ export default function ClientDetails() {
       </div>
 
       {/* Hero Overview Card */}
-      <div className="card p-6 md:p-8 bg-gradient-to-r from-brand-600/10 via-transparent to-transparent border-l-4 border-brand-500">
+      <div className="glass-card p-6 md:p-8 rounded-2xl border border-white/50 dark:border-white/10 shadow-xl bg-gradient-to-r from-brand-500/10 via-brand-500/5 to-transparent border-l-4 border-l-brand-500">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-surface-900 dark:text-white tracking-tight">
@@ -183,7 +185,7 @@ export default function ClientDetails() {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Card: Service & Expiry Info */}
-        <div className="card p-6 space-y-4">
+        <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4">
           <h2 className="text-base font-bold text-surface-900 dark:text-white border-b border-surface-150 dark:border-surface-700 pb-2">
             Service & Renewal Details
           </h2>
@@ -268,7 +270,7 @@ export default function ClientDetails() {
         </div>
 
         {/* Right Card: Client Contact Info */}
-        <div className="card p-6 space-y-4">
+        <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4">
           <h2 className="text-base font-bold text-surface-900 dark:text-white border-b border-surface-150 dark:border-surface-700 pb-2">
             Contact Information
           </h2>
@@ -339,7 +341,7 @@ export default function ClientDetails() {
 
       {/* Invoice Details Card */}
       {(client.invoice_status === 'Sent' || client.invoice_number) && (
-        <div className="card p-6 space-y-4">
+        <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4">
           <h2 className="text-base font-bold text-surface-900 dark:text-white border-b border-surface-150 dark:border-surface-700 pb-2 flex items-center gap-2">
             <FileCheck className="w-4 h-4 text-emerald-500" /> {client.invoice_type || 'Invoice'} Information
           </h2>
@@ -406,7 +408,7 @@ export default function ClientDetails() {
 
       {/* Payment Details Card */}
       {client.payment_status === 'Yes' && (
-        <div className="card p-6 space-y-4">
+        <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4">
           <h2 className="text-base font-bold text-surface-900 dark:text-white border-b border-surface-150 dark:border-surface-700 pb-2 flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-emerald-500" /> Payment Confirmation
           </h2>
@@ -429,7 +431,7 @@ export default function ClientDetails() {
       )}
 
       {/* Dedicated Quotation & Commercial Details Card */}
-      <div className="card p-6 space-y-4 bg-gradient-to-br from-indigo-50/30 via-transparent to-transparent dark:from-indigo-950/10 border-l-4 border-indigo-500">
+      <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent dark:from-indigo-950/20 border-l-4 border-l-indigo-500">
         <div className="flex items-center justify-between border-b border-surface-150 dark:border-surface-700 pb-2">
           <h2 className="text-base font-bold text-surface-900 dark:text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> Quotation & Commercial Information
@@ -488,7 +490,7 @@ export default function ClientDetails() {
       </div>
 
       {/* Product & Financial Information Card */}
-      <div className="card p-6 space-y-4">
+      <div className="glass-card p-6 rounded-2xl border border-white/40 dark:border-white/10 shadow-lg space-y-4">
         <div className="flex items-center justify-between border-b border-surface-150 dark:border-surface-700 pb-2">
           <h2 className="text-base font-bold text-surface-900 dark:text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-brand-500" /> Product & Financial Details

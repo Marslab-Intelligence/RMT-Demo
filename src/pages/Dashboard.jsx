@@ -27,6 +27,8 @@ import {
   Zap
 } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '../utils/formatters';
+import EmptyState from '../components/common/EmptyState';
+import StatusBadge from '../components/common/StatusBadge';
 
 export default function Dashboard() {
   const { token, user } = useAuth();
@@ -449,25 +451,27 @@ export default function Dashboard() {
         </div>
 
         {actionableItems.length === 0 ? (
-          <div className="py-8 text-center bg-surface-50 dark:bg-surface-900/30 rounded-xl border border-dashed border-surface-200 dark:border-surface-700">
-            <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-80" />
-            <p className="text-sm font-semibold text-surface-700 dark:text-surface-300">All caught up!</p>
-            <p className="text-xs text-surface-500 mt-1">No high-priority overdue or due today items currently pending.</p>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="All caught up!"
+            description="No high-priority overdue or due today items currently pending."
+            compact={true}
+            className="py-6"
+          />
         ) : (
-          <div className="overflow-x-auto custom-scrollbar">
+          <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200/60 dark:border-white/10">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-surface-200 dark:border-surface-700/60 text-[11px] uppercase tracking-wider text-surface-500 dark:text-surface-400 font-semibold bg-surface-50/50 dark:bg-surface-900/40">
-                  <th className="py-3 px-4 rounded-l-lg">Client & Service</th>
+                <tr className="border-b border-slate-200/60 dark:border-white/10 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-black bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md">
+                  <th className="py-3 px-4">Client & Service</th>
                   <th className="py-3 px-4">Due Date</th>
                   <th className="py-3 px-4">Value</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Follow-up</th>
-                  <th className="py-3 px-4 text-right rounded-r-lg">Action</th>
+                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-200/60 dark:divide-surface-700/40 text-xs">
+              <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-xs">
                 {actionableItems.map((item) => {
                   const isDueToday = item.renewal_date && new Date(item.renewal_date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
                   const isOverdue = item.renewal_date && new Date(item.renewal_date) < new Date(new Date().setHours(0,0,0,0));
@@ -476,34 +480,30 @@ export default function Dashboard() {
                     <tr 
                       key={item.id}
                       onClick={() => navigate(`/renewals?search=${encodeURIComponent(item.client_name)}`)}
-                      className="hover:bg-surface-50 dark:hover:bg-surface-800/40 transition-colors cursor-pointer group"
+                      className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors cursor-pointer group"
                     >
-                      <td className="py-3 px-4 font-semibold text-surface-900 dark:text-white">
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
                         <div className="truncate max-w-[200px]">{item.client_name}</div>
-                        <div className="text-[11px] font-normal text-surface-500 truncate max-w-[200px]">{item.service}</div>
+                        <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[200px]">{item.service}</div>
                       </td>
-                      <td className="py-3 px-4 font-medium whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                      <td className="py-3 px-4 font-mono font-medium whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           isDueToday 
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 animate-pulse' 
+                            ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 animate-pulse' 
                             : isOverdue 
-                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' 
-                              : 'text-surface-700 dark:text-surface-300'
+                              ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30' 
+                              : 'text-slate-700 dark:text-slate-300'
                         }`}>
                           {item.renewal_date ? formatDate(item.renewal_date) : 'N/A'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-bold text-surface-900 dark:text-white whitespace-nowrap">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
                         {formatCurrency(item.value)}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          item.status === 'Expired' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                        }`}>
-                          {item.status}
-                        </span>
+                        <StatusBadge status={item.status} size="xs" />
                       </td>
-                      <td className="py-3 px-4 text-surface-600 dark:text-surface-300 whitespace-nowrap">
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">
                         {item.follow_up_status || 'Pending'}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
@@ -512,7 +512,7 @@ export default function Dashboard() {
                             e.stopPropagation();
                             navigate(`/renewals?search=${encodeURIComponent(item.client_name)}`);
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/50 rounded-lg transition-colors inline-flex items-center gap-1"
+                          className="px-3 py-1.5 text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 rounded-xl transition-all border border-brand-500/20 inline-flex items-center gap-1 shadow-sm"
                         >
                           <span>Review</span>
                           <ArrowUpRight className="w-3 h-3" />
@@ -610,7 +610,12 @@ export default function Dashboard() {
 
             <div className="space-y-3.5 flex-1">
                {activityLogs.length === 0 ? (
-                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 text-center py-6">No recent activity logged.</p>
+                 <EmptyState
+                   icon={Zap}
+                   title="No recent activity"
+                   description="User actions and system changes will appear here."
+                   compact={true}
+                 />
                ) : (
                   activityLogs.slice(0, 5).map(log => (
                     <div key={log.id} className="flex items-center gap-3.5 p-2.5 rounded-xl bg-white/50 dark:bg-slate-800/40 border border-white/60 dark:border-white/10 hover:border-brand-500/40 transition-all group">
@@ -658,7 +663,12 @@ export default function Dashboard() {
 
             <div className="space-y-3 flex-1">
               {filteredNotifications.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 text-center py-6">No recent updates available.</p>
+                <EmptyState
+                  icon={Bell}
+                  title="No recent updates"
+                  description="Notifications and renewal reminders will appear here."
+                  compact={true}
+                />
               ) : (
                 filteredNotifications.slice(0, 5).map(notif => {
                   const notifColorMap = {
