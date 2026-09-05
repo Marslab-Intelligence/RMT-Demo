@@ -190,33 +190,37 @@ export default function Layout({ children }) {
 
   // Dark mode toggle
   useEffect(() => {
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setIsDarkMode(true);
+    const isDark = localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setIsDarkMode(isDark);
+    if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
-      setIsDarkMode(false);
       document.documentElement.classList.remove('dark');
     }
   }, []);
 
   const toggleDarkMode = () => {
-    const applyToggle = () => {
-      document.documentElement.classList.add('theme-transitioning');
-      if (isDarkMode) {
-        document.documentElement.classList.remove('dark');
-        localStorage.theme = 'light';
-        setIsDarkMode(false);
-      } else {
+    const willBeDark = !isDarkMode;
+
+    const performThemeChange = () => {
+      if (willBeDark) {
         document.documentElement.classList.add('dark');
         localStorage.theme = 'dark';
         setIsDarkMode(true);
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.theme = 'light';
+        setIsDarkMode(false);
       }
-      setTimeout(() => {
-        document.documentElement.classList.remove('theme-transitioning');
-      }, 500);
     };
 
-    applyToggle();
+    if (typeof document.startViewTransition === 'function') {
+      document.startViewTransition(() => {
+        performThemeChange();
+      });
+    } else {
+      performThemeChange();
+    }
   };
 
   // Click outside to close dropdowns
@@ -583,18 +587,15 @@ export default function Layout({ children }) {
       {/* Floating AI Agent Assistant */}
       <AgentDrawer />
 
-      {/* Light Theme Background Layer */}
-      <div className="fixed inset-0 pointer-events-none bg-gradient-to-br from-amber-100 via-orange-50 to-rose-100 opacity-100 dark:opacity-0 transition-opacity duration-500 ease-in-out z-0" />
-
-      {/* Dark / Black Theme Background Layer */}
-      <div className="fixed inset-0 pointer-events-none bg-gradient-to-br from-stone-900 via-slate-900 to-rose-950 opacity-0 dark:opacity-100 transition-opacity duration-500 ease-in-out z-0" />
+      {/* Seamless Single Background Layer */}
+      <div className="fixed inset-0 pointer-events-none bg-gradient-to-br from-amber-100/90 via-orange-50/90 to-rose-100/90 dark:from-[#0c0a12] dark:via-[#0e111a] dark:to-[#170c14] transition-colors duration-300 ease-in-out z-0" />
 
       {/* Decorative blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-300/35 dark:bg-amber-700/20 blur-3xl transition-all duration-500 ease-in-out" />
-        <div className="absolute top-1/2 right-0 w-80 h-80 rounded-full bg-orange-300/30 dark:bg-orange-800/15 blur-3xl transition-all duration-500 ease-in-out" />
-        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-rose-300/30 dark:bg-rose-800/15 blur-3xl transition-all duration-500 ease-in-out" />
-        <div className="absolute top-1/4 left-1/2 w-64 h-64 rounded-full bg-amber-200/20 dark:bg-amber-900/10 blur-3xl transition-all duration-500 ease-in-out" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-300/30 dark:bg-amber-700/15 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute top-1/2 right-0 w-80 h-80 rounded-full bg-orange-300/25 dark:bg-orange-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-rose-300/25 dark:bg-rose-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute top-1/4 left-1/2 w-64 h-64 rounded-full bg-amber-200/20 dark:bg-amber-900/10 blur-3xl transition-colors duration-300 ease-in-out" />
       </div>
 
       {/* Mobile sidebar backdrop */}
@@ -613,22 +614,25 @@ export default function Layout({ children }) {
  
       <div
         ref={sidebarRef}
-        className={`flex flex-col w-64 flex-shrink-0 fixed inset-y-0 left-0 z-30 transform-gpu transition-transform duration-300 ease-in-out ${isSidebarPinned || isHoveredSidebar || isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        style={{
-          background: isSidebarPinned
-            ? (isDarkMode ? 'rgba(20, 16, 30, 0.85)' : 'rgba(248, 240, 230, 0.80)')
-            : (isDarkMode ? 'rgba(15, 12, 22, 0.25)' : 'rgba(235, 215, 195, 0.18)'),
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRight: isDarkMode ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(180, 150, 120, 0.25)',
-          transition: 'background-color 450ms cubic-bezier(0.4, 0, 0.2, 1), border-color 450ms cubic-bezier(0.4, 0, 0.2, 1), color 450ms cubic-bezier(0.4, 0, 0.2, 1)'
-        }}
+        className={`flex flex-col w-64 flex-shrink-0 fixed inset-y-0 left-0 z-30 transform-gpu transition-transform duration-300 ease-in-out backdrop-blur-xl border-r ${
+          isSidebarPinned
+            ? 'bg-[#f8f0e6]/80 dark:bg-[#14101e]/85'
+            : 'bg-[#ebd7c3]/20 dark:bg-[#0f0c16]/25'
+        } border-stone-300/30 dark:border-white/10 ${
+          isSidebarPinned || isHoveredSidebar || isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
       >
-        <div className="flex items-center justify-between h-16 px-5 flex-shrink-0" style={{ borderBottom: isDarkMode ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(180, 150, 120, 0.2)' }}>
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="MarsLab Logo" className="h-8 w-auto object-contain dark:invert dark:hue-rotate-180" />
+        <div className="flex items-center justify-between h-14 px-4 flex-shrink-0 border-b border-stone-300/30 dark:border-white/10">
+          <div 
+            onClick={() => navigate('/')} 
+            className="flex items-center cursor-pointer transition-opacity hover:opacity-85 select-none"
+            title="MarsLab Dashboard"
+          >
+            <img src="/logo.png" alt="MarsLab Logo" className="h-7 w-auto object-contain dark:invert dark:hue-rotate-180" />
+          </div>
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
                 const newVal = !isSidebarPinned;
@@ -636,51 +640,48 @@ export default function Layout({ children }) {
                 localStorage.setItem('sidebar_pinned', String(newVal));
               }}
               title={isSidebarPinned ? 'Unpin Sidebar' : 'Pin Sidebar'}
-              className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+              className={`hidden lg:flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-200 border cursor-pointer ${
+                isSidebarPinned
+                  ? 'bg-brand-500/15 border-brand-500/30 text-brand-600 dark:text-brand-400 shadow-sm'
+                  : 'bg-black/[0.03] dark:bg-white/[0.04] border-black/[0.06] dark:border-white/[0.08] text-stone-400 dark:text-gray-400 hover:text-stone-900 dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.08]'
+              }`}
             >
               <Pin 
-                className={`w-4 h-4 transition-transform duration-200 ${isSidebarPinned ? 'rotate-45 text-brand-500 fill-brand-500' : '-rotate-45'}`} 
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${isSidebarPinned ? 'rotate-45 text-brand-500 fill-brand-500' : '-rotate-45'}`} 
               />
             </button>
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="lg:hidden p-1 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="lg:hidden text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3.5">
           <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
               return (
                 <NavLink
                   key={item.name}
                   to={item.path}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
-                  style={{
-                    background: isActive 
-                      ? (isDarkMode ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.35)') 
-                      : 'transparent',
-                    backdropFilter: isActive ? 'blur(12px)' : 'none',
-                    WebkitBackdropFilter: isActive ? 'blur(12px)' : 'none',
-                    border: isActive 
-                      ? (isDarkMode ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(255, 255, 255, 0.45)') 
-                      : '1px solid transparent',
-                    color: isActive 
-                      ? (isDarkMode ? '#ffffff' : '#111827') 
-                      : (isDarkMode ? '#8b8b9a' : '#4d453e'),
-                    boxShadow: isActive ? '0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04)' : 'none',
-                  }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = isDarkMode ? '#1c1824' : 'rgba(220, 198, 175, 0.40)'; e.currentTarget.style.color = isDarkMode ? '#fff' : '#111827'; e.currentTarget.style.border = isDarkMode ? '1px solid #333' : '1px solid rgba(180, 150, 120, 0.3)'; } }}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = isDarkMode ? '#8b8b9a' : '#4d453e'; e.currentTarget.style.border = '1px solid transparent'; } }}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      isActive
+                        ? 'bg-white/45 dark:bg-black/45 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-stone-700 dark:text-gray-400 hover:bg-stone-300/30 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white border border-transparent'
+                    }`
+                  }
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" style={{ color: isActive ? (isDarkMode ? '#ffffff' : '#111827') : (isDarkMode ? '#8b8b9a' : '#4d453e') }} />
-                  {item.name}
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-gray-900 dark:text-white' : 'text-stone-600 dark:text-gray-400'}`} />
+                      <span>{item.name}</span>
+                    </>
+                  )}
                 </NavLink>
               );
             })}
@@ -703,17 +704,10 @@ export default function Layout({ children }) {
       >
         {/* Top Header */}
         <header
-          className="h-16 flex items-center justify-between px-6 z-20 sticky top-0 transition-all duration-300"
-          style={{
-            background: isDarkMode ? 'rgba(20, 16, 30, 0.60)' : 'rgba(248, 240, 230, 0.60)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            borderBottom: isDarkMode ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(180, 150, 120, 0.2)',
-            transition: 'background-color 450ms cubic-bezier(0.4, 0, 0.2, 1), border-color 450ms cubic-bezier(0.4, 0, 0.2, 1), color 450ms cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
+          className="h-14 flex items-center justify-between px-5 z-20 sticky top-0 backdrop-blur-xl bg-[#f8f0e6]/60 dark:bg-[#14101e]/60 border-b border-stone-300/30 dark:border-white/10 transition-colors duration-300"
         >
           {/* ── LEFT: Home + Role Badge ── */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
               className="lg:hidden text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-white"
@@ -730,41 +724,25 @@ export default function Layout({ children }) {
             <button
               onClick={() => navigate('/')}
               title="Go to Dashboard"
-              className="flex items-center gap-2 h-9 px-3 rounded-xl text-sm font-medium transition-all"
-              style={{
-                background: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                color: isDarkMode ? '#c4c4cc' : '#4b5563',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'; }}
+              className="dropdown-btn-glass h-8 px-2.5 text-xs"
             >
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Home</span>
+              <Home className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+              <span className="hidden sm:inline font-semibold">Home</span>
             </button>
-
           </div>
 
           {/* ── RIGHT: Role Badge + Theme + Bell + Profile ── */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
 
             {/* Role Badge */}
-            <span className={`hidden sm:inline-flex items-center h-9 px-3 rounded-xl text-xs font-semibold tracking-wide ${getRoleBadgeStyle(user?.role)}`}>
+            <span className={`hidden sm:inline-flex items-center h-8 px-2.5 rounded-xl text-[11px] font-semibold tracking-wide ${getRoleBadgeStyle(user?.role)}`}>
               {getRoleLabel(user?.role)}
             </span>
 
             {/* Theme Toggle */}
             <button
               onClick={toggleDarkMode}
-              className="flex items-center justify-center h-9 w-9 rounded-xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer"
-              style={{
-                background: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                color: isDarkMode ? '#c4c4cc' : '#4b5563',
-                transition: 'all 450ms cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'; }}
+              className="flex items-center justify-center h-9 w-9 rounded-xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer bg-black/[0.04] dark:bg-white/[0.04] hover:bg-black/[0.08] dark:hover:bg-white/[0.08] border border-black/[0.08] dark:border-white/[0.08] text-gray-700 dark:text-gray-300"
               title={isDarkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
             >
               <div className="relative w-4 h-4 flex items-center justify-center">
@@ -780,14 +758,7 @@ export default function Layout({ children }) {
             <div ref={notificationsRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="flex items-center justify-center relative h-9 w-9 rounded-xl transition-all"
-                style={{
-                  background: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                  border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                  color: isDarkMode ? '#c4c4cc' : '#4b5563',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'; }}
+                className="dropdown-btn-glass flex items-center justify-center relative h-9 w-9 !px-0 rounded-xl"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
@@ -796,17 +767,9 @@ export default function Layout({ children }) {
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 rounded-2xl overflow-hidden z-50 shadow-2xl transition-all"
-                  style={{
-                    background: isDarkMode ? 'rgba(24, 24, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-                    border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.1)',
-                    boxShadow: isDarkMode ? '0 20px 35px -5px rgba(0,0,0,0.6)' : '0 20px 35px -5px rgba(0,0,0,0.15)',
-                  }}
-                >
-                  <div className="px-4 py-3 flex justify-between items-center"
-                    style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)' }}>
-                    <h3 className="text-sm font-semibold" style={{ color: isDarkMode ? '#f3f4f6' : '#111827' }}>Notifications</h3>
+                <div className="absolute right-0 mt-2 w-80 dropdown-menu-glass z-50">
+                  <div className="px-4 py-3 flex justify-between items-center border-b border-black/[0.06] dark:border-white/[0.08]">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
                     {unreadCount > 0 && (
                       <span className="text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">
                         {unreadCount} new
@@ -815,7 +778,7 @@ export default function Layout({ children }) {
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-sm" style={{ color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                      <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
                         No notifications right now.
                       </div>
                     ) : (
@@ -823,17 +786,31 @@ export default function Layout({ children }) {
                         <div
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className={`px-4 py-3 cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${notif.read ? 'opacity-60' : ''}`}
-                          style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.05)' }}
+                          className={`p-3.5 border-b border-black/[0.04] dark:border-white/[0.04] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-pointer transition-colors ${
+                            !notif.read ? 'bg-black/[0.02] dark:bg-white/[0.02]' : ''
+                          }`}
                         >
-                          <p className="text-sm font-medium" style={{ color: isDarkMode ? '#f3f4f6' : '#111827' }}>{notif.title}</p>
-                          <p className="text-xs mt-0.5 line-clamp-2" style={{ color: isDarkMode ? '#9ca3af' : '#6b7280' }}>{notif.message}</p>
-                          <p className="text-[10px] mt-1" style={{ color: isDarkMode ? '#6b7280' : '#9ca3af' }}>{formatDateTime(notif.created_at)}</p>
+                          <div className="flex gap-3 items-start">
+                            <div className="mt-0.5">
+                              {getNotificationIcon(notif.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs ${!notif.read ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
+                                {notif.message}
+                              </p>
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
+                                {formatTimeAgo(notif.created_at)}
+                              </span>
+                            </div>
+                            {!notif.read && (
+                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 flex-shrink-0" />
+                            )}
+                          </div>
                         </div>
                       ))
                     )}
                   </div>
-                  <div className="px-3 py-2" style={{ borderTop: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="p-2 border-t border-black/[0.06] dark:border-white/[0.08]">
                     <button
                       onClick={() => { navigate('/notifications'); setShowNotifications(false); }}
                       className="w-full text-center text-xs font-medium text-red-500 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -849,69 +826,53 @@ export default function Layout({ children }) {
             <div ref={profileDropdownRef} className="relative">
               <button
                 onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="flex items-center gap-2.5 h-9 pl-1.5 pr-3 rounded-xl transition-all"
-                style={{
-                  background: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
-                  border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                }}
+                className="dropdown-btn-glass h-9 pl-1.5 pr-3 rounded-xl"
               >
                 <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 text-white"
                   style={{
                     background: user?.role === 'admin'
                       ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
                       : 'linear-gradient(135deg,#10b981,#047857)',
-                    color: '#fff',
                   }}
                 >
                   {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
                 </div>
-                <div className="hidden sm:flex flex-col items-start leading-none">
-                  <span className="text-xs font-semibold" style={{ color: isDarkMode ? '#e5e5e5' : '#111827' }}>
+                <div className="hidden sm:flex flex-col items-start leading-none ml-2">
+                  <span className="text-xs font-semibold text-gray-900 dark:text-gray-200">
                     {user?.fullName}
                   </span>
-                  <span className="text-[10px] mt-0.5 truncate max-w-[110px]" style={{ color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                  <span className="text-[10px] mt-0.5 truncate max-w-[110px] text-gray-500 dark:text-gray-400">
                     {user?.email || `${getRoleLabel(user?.role)?.toLowerCase()}@marslab...`}
                   </span>
                 </div>
                 <ChevronDown
-                  className="w-3 h-3 hidden sm:block"
-                  style={{
-                    color: isDarkMode ? '#9ca3af' : '#6b7280',
-                    transform: showProfileDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s',
-                  }}
+                  className={`w-3 h-3 hidden sm:block ml-2 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
+                    showProfileDropdown ? 'rotate-180' : 'rotate-0'
+                  }`}
                 />
               </button>
 
               {showProfileDropdown && (
                 <div
-                  className="absolute right-0 mt-2 w-60 rounded-2xl overflow-hidden z-50 shadow-2xl transition-all"
-                  style={{
-                    background: isDarkMode ? 'rgba(24, 24, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-                    border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.1)',
-                    boxShadow: isDarkMode ? '0 20px 35px -5px rgba(0,0,0,0.6)' : '0 20px 35px -5px rgba(0,0,0,0.15)',
-                  }}
+                  className="absolute right-0 mt-2 w-60 dropdown-menu-glass z-50"
                 >
-                  <div className="px-4 py-3.5 flex items-center gap-3"
-                    style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)' }}>
+                  <div className="px-4 py-3.5 flex items-center gap-3 border-b border-black/[0.06] dark:border-white/[0.08]">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 text-white"
                       style={{
                         background: user?.role === 'admin'
                           ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
                           : 'linear-gradient(135deg,#10b981,#047857)',
-                        color: '#fff',
                       }}
                     >
                       {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
                     </div>
                     <div className="flex flex-col leading-snug overflow-hidden">
-                      <span className="text-sm font-semibold truncate" style={{ color: isDarkMode ? '#f3f4f6' : '#111827' }}>
+                      <span className="text-sm font-semibold truncate text-gray-900 dark:text-gray-100">
                         {user?.fullName}
                       </span>
-                      <span className="text-xs truncate mt-0.5" style={{ color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                      <span className="text-xs truncate mt-0.5 text-gray-500 dark:text-gray-400">
                         {user?.email || 'marslab.in'}
                       </span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 self-start ${getRoleBadgeStyle(user?.role)}`}>
@@ -920,10 +881,9 @@ export default function Layout({ children }) {
                     </div>
                   </div>
                   {user?.role === 'admin' && (
-                    <div className="px-3 py-2.5 flex flex-col gap-2"
-                      style={{ borderBottom: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)' }}>
+                    <div className="px-3 py-2.5 flex flex-col gap-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                       <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                           Email Automation
                         </span>
                         <div className="flex items-center gap-1.5">
@@ -954,10 +914,7 @@ export default function Layout({ children }) {
                   <div className="p-2">
                     <button
                       onClick={() => { setShowProfileDropdown(false); handleLogout(); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-sm font-medium transition-all"
-                      style={{ color: isDarkMode ? '#f87171' : '#ef4444', background: 'transparent' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = isDarkMode ? 'rgba(239,68,68,0.10)' : 'rgba(254,226,226,0.7)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-sm font-medium transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
                       <LogOut className="w-4 h-4" />
                       Sign Out

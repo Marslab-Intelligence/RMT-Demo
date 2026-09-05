@@ -140,8 +140,6 @@ export default function Trash() {
     }
   };
 
-  const isDarkMode = document.documentElement.classList.contains('dark');
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
       
@@ -208,14 +206,7 @@ export default function Trash() {
       )}
 
       {/* Main content table card */}
-      <div className="rounded-2xl border transition-all duration-300 shadow-xl overflow-hidden"
-        style={{
-          background: isDarkMode ? 'rgba(28, 25, 23, 0.45)' : 'rgba(255, 255, 255, 0.45)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.5)',
-        }}
-      >
+      <div className="card shadow-xl overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
@@ -235,7 +226,7 @@ export default function Trash() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b" style={{borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.3)'}}>
+                <tr className="border-b border-black/10 dark:border-white/10">
                   <th className="px-6 py-4 w-12 text-center">
                     <div
                       onClick={() => {
@@ -273,7 +264,7 @@ export default function Trash() {
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y" style={{divideColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.3)'}}>
+              <tbody className="divide-y divide-black/5 dark:divide-white/10">
                 {trashData.map((row) => (
                   <tr 
                     key={row.id} 
@@ -360,11 +351,7 @@ export default function Trash() {
       {selectedRecord && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-md rounded-2xl border shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
-            style={{
-              background: isDarkMode ? 'rgba(28, 25, 23, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
-            }}
+            className="w-full max-w-md rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#1c1917]/95 backdrop-blur-xl shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-red-600">
@@ -420,11 +407,7 @@ export default function Trash() {
       {showBulkRestoreModal && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-md rounded-2xl border shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
-            style={{
-              background: isDarkMode ? 'rgba(28, 25, 23, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
-            }}
+            className="w-full max-w-md rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#1c1917]/95 backdrop-blur-xl shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-emerald-600">
@@ -477,11 +460,7 @@ export default function Trash() {
       {showBulkDeleteModal && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-md rounded-2xl border shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
-            style={{
-              background: isDarkMode ? 'rgba(28, 25, 23, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)',
-            }}
+            className="w-full max-w-md rounded-2xl border border-black/10 dark:border-white/15 bg-white/95 dark:bg-[#1c1917]/95 backdrop-blur-xl shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-red-600">

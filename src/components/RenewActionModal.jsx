@@ -4,6 +4,8 @@ import { X, RefreshCw, AlertTriangle, Calendar } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import GlassSelect from './GlassSelect';
+import GlassDatePicker from './GlassDatePicker';
 
 export default function RenewActionModal({ renewal, onClose, onSuccess }) {
   const { token, user } = useAuth();
@@ -172,29 +174,14 @@ export default function RenewActionModal({ renewal, onClose, onSuccess }) {
 
               <div>
                 <label className="label">New Renewal Date <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="DD/MM/YYYY" 
-                    required 
-                    value={formData.renewal_date} 
-                    onChange={handleDateChange} 
-                    className="input-field pr-10" 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => datePickerRef.current?.showPicker()}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 dark:hover:text-white"
-                  >
-                    <Calendar className="w-5 h-5" />
-                  </button>
-                  <input 
-                    type="date"
-                    ref={datePickerRef}
-                    onChange={handleNativeDateSelect}
-                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-                  />
-                </div>
+                <GlassDatePicker 
+                  placeholder="DD/MM/YYYY" 
+                  required 
+                  value={formData.renewal_date} 
+                  outputFormat="DD/MM/YYYY"
+                  onChange={(e, val) => setFormData({ ...formData, renewal_date: val !== undefined ? val : e.target.value })} 
+                  className="w-full" 
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -220,34 +207,36 @@ export default function RenewActionModal({ renewal, onClose, onSuccess }) {
               
               <div>
                 <label className="label">New Status</label>
-                <select 
+                <GlassSelect 
                   value={formData.status} 
-                  onChange={(e) => setFormData({...formData, status: e.target.value})} 
-                  className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="Active" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Active</option>
-                  <option value="Renewed" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Renewed</option>
-                </select>
+                  onChange={(e, val) => setFormData({...formData, status: val !== undefined ? val : e.target.value})} 
+                  options={[
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Renewed', label: 'Renewed' },
+                  ]}
+                  className="w-full"
+                />
               </div>
             </form>
           ) : (
             <form id="sales-form" onSubmit={handleSalesSubmit} className="space-y-4">
               <div>
                 <label className="label">Follow-up Status <span className="text-red-500">*</span></label>
-                <select 
+                <GlassSelect 
                   required
                   value={followUpData.follow_up_status} 
-                  onChange={(e) => setFollowUpData({...followUpData, follow_up_status: e.target.value})} 
-                  className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Select Status...</option>
-                  <option value="Meeting Scheduled" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Meeting Scheduled</option>
-                  <option value="Proposal Sent" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Proposal Sent</option>
-                  <option value="Negotiation" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Negotiation</option>
-                  <option value="Verbal Agreement" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Verbal Agreement</option>
-                  <option value="At Risk" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">At Risk</option>
-                  <option value="Completed" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Completed (Pending Finance)</option>
-                </select>
+                  placeholder="Select Status..."
+                  onChange={(e, val) => setFollowUpData({...followUpData, follow_up_status: val !== undefined ? val : e.target.value})} 
+                  options={[
+                    { value: 'Meeting Scheduled', label: 'Meeting Scheduled' },
+                    { value: 'Proposal Sent', label: 'Proposal Sent' },
+                    { value: 'Negotiation', label: 'Negotiation' },
+                    { value: 'Verbal Agreement', label: 'Verbal Agreement' },
+                    { value: 'At Risk', label: 'At Risk' },
+                    { value: 'Completed', label: 'Completed (Pending Finance)' },
+                  ]}
+                  className="w-full"
+                />
               </div>
               <div>
                 <label className="label">Follow-up Remarks</label>

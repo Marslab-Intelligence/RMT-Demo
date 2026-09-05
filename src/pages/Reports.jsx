@@ -17,6 +17,8 @@ import ThreeDGraph from '../components/ThreeDGraph';
 import AreaGraphVisualizer from '../components/AreaGraphVisualizer';
 import ServiceDistributionPieChart from '../components/ServiceDistributionPieChart';
 import ClientDetailsModal from '../components/ClientDetailsModal';
+import GlassSelect from '../components/GlassSelect';
+import GlassDatePicker from '../components/GlassDatePicker';
 
 const STATUS_COLORS = {
   'Active': '#3b82f6',          // Blue
@@ -646,16 +648,17 @@ export default function Reports() {
                 <div className="flex items-center gap-2">
                   {/* Filter Dropdown */}
                   <div className="relative">
-                    <select
+                    <GlassSelect
                       value={emailLogFilter}
-                      onChange={(e) => setEmailLogFilter(e.target.value)}
-                      className="px-2.5 py-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/15 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
-                    >
-                      <option value="All">All Email Types</option>
-                      <option value="sent">Sent Status</option>
-                      <option value="reminder">Reminders Only</option>
-                      <option value="expired">Expiry Alerts</option>
-                    </select>
+                      onChange={(e, val) => setEmailLogFilter(val !== undefined ? val : e.target.value)}
+                      size="xs"
+                      options={[
+                        { value: 'All', label: 'All Email Types' },
+                        { value: 'sent', label: 'Sent Status' },
+                        { value: 'reminder', label: 'Reminders Only' },
+                        { value: 'expired', label: 'Expiry Alerts' },
+                      ]}
+                    />
                   </div>
 
                   {/* Search */}
@@ -751,15 +754,16 @@ export default function Reports() {
                 <div className="flex items-center gap-2">
                   {/* Filter Dropdown */}
                   <div className="relative">
-                    <select
+                    <GlassSelect
                       value={auditLogRoleFilter}
-                      onChange={(e) => setAuditLogRoleFilter(e.target.value)}
-                      className="px-2.5 py-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/15 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
-                    >
-                      <option value="All">All Roles</option>
-                      <option value="admin">Admin</option>
-                      <option value="user">User / Sales</option>
-                    </select>
+                      onChange={(e, val) => setAuditLogRoleFilter(val !== undefined ? val : e.target.value)}
+                      size="xs"
+                      options={[
+                        { value: 'All', label: 'All Roles' },
+                        { value: 'admin', label: 'Admin' },
+                        { value: 'user', label: 'User / Sales' },
+                      ]}
+                    />
                   </div>
 
                   {/* Search */}
@@ -890,7 +894,7 @@ export default function Reports() {
                   <Filter className="w-4 h-4 text-slate-400" />
                   <button
                     onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-                    className="px-3 py-2 bg-slate-900 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer flex items-center gap-2 min-w-[140px] justify-between"
+                    className="dropdown-btn-glass min-w-[145px]"
                   >
                     <span className="truncate max-w-[200px]">
                       {modalCategoryFilter.length === 0 
@@ -904,13 +908,13 @@ export default function Reports() {
                   {categoryDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-[10]" onClick={() => setCategoryDropdownOpen(false)} />
-                      <div className="absolute top-full left-0 mt-1.5 z-[20] bg-slate-900 border border-white/20 rounded-xl shadow-2xl shadow-black/40 min-w-[220px] max-h-[320px] overflow-y-auto custom-scrollbar py-1.5">
+                      <div className="absolute top-full left-0 mt-1.5 z-[20] dropdown-menu-glass min-w-[220px] max-h-[320px] overflow-y-auto custom-scrollbar py-1.5">
                         {/* Select All / Clear */}
-                        <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+                        <div className="px-3 py-2 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
                           <button
                             onClick={() => { setModalCategoryFilter([]); }}
                             className={`text-[11px] font-bold transition-colors ${
-                              modalCategoryFilter.length === 0 ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+                              modalCategoryFilter.length === 0 ? 'text-brand-500 dark:text-brand-400' : 'text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white'
                             }`}
                           >
                             All Services
@@ -918,7 +922,7 @@ export default function Reports() {
                           {modalCategoryFilter.length > 0 && (
                             <button
                               onClick={() => setModalCategoryFilter([])}
-                              className="text-[10px] text-rose-400 hover:text-rose-300 font-bold"
+                              className="text-[10px] text-rose-500 hover:text-rose-600 font-bold"
                             >
                               Clear ({modalCategoryFilter.length})
                             </button>
@@ -937,14 +941,14 @@ export default function Reports() {
                                   setModalCategoryFilter([...modalCategoryFilter, cat]);
                                 }
                               }}
-                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all hover:bg-white/5 ${
+                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${
                                 isSelected ? 'bg-brand-500/10' : ''
                               }`}
                             >
                               <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                                 isSelected 
                                   ? 'bg-brand-500 border-brand-500' 
-                                  : 'border-slate-500 hover:border-slate-300'
+                                  : 'border-slate-400 dark:border-slate-500'
                               }`}>
                                 {isSelected && (
                                   <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -953,9 +957,9 @@ export default function Reports() {
                                 )}
                               </div>
                               <span className={`text-xs font-semibold ${
-                                isSelected ? 'text-white' : 'text-slate-300'
+                                isSelected ? 'text-black dark:text-white' : 'text-slate-700 dark:text-slate-300'
                               }`}>{cat}</span>
-                              <span className="ml-auto text-[10px] text-slate-500 font-mono">
+                              <span className="ml-auto text-[10px] text-slate-400 font-mono">
                                 {serviceRecords.filter(r => r.service === cat).length}
                               </span>
                             </div>
@@ -971,7 +975,7 @@ export default function Reports() {
                   <Shield className="w-4 h-4 text-slate-400" />
                   <button
                     onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                    className="px-3 py-2 bg-slate-900 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer flex items-center gap-2 min-w-[130px] justify-between"
+                    className="dropdown-btn-glass min-w-[135px]"
                   >
                     <span className="truncate max-w-[180px]">
                       {modalStatusFilter.length === 0 
@@ -985,12 +989,12 @@ export default function Reports() {
                   {statusDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-[10]" onClick={() => setStatusDropdownOpen(false)} />
-                      <div className="absolute top-full left-0 mt-1.5 z-[20] bg-slate-900 border border-white/20 rounded-xl shadow-2xl shadow-black/40 min-w-[200px] max-h-[300px] overflow-y-auto custom-scrollbar py-1.5">
-                        <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+                      <div className="absolute top-full left-0 mt-1.5 z-[20] dropdown-menu-glass min-w-[200px] max-h-[300px] overflow-y-auto custom-scrollbar py-1.5">
+                        <div className="px-3 py-2 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
                           <button
                             onClick={() => { setModalStatusFilter([]); }}
                             className={`text-[11px] font-bold transition-colors ${
-                              modalStatusFilter.length === 0 ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+                              modalStatusFilter.length === 0 ? 'text-brand-500 dark:text-brand-400' : 'text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white'
                             }`}
                           >
                             All Statuses
@@ -998,7 +1002,7 @@ export default function Reports() {
                           {modalStatusFilter.length > 0 && (
                             <button
                               onClick={() => setModalStatusFilter([])}
-                              className="text-[10px] text-rose-400 hover:text-rose-300 font-bold"
+                              className="text-[10px] text-rose-500 hover:text-rose-600 font-bold"
                             >
                               Clear ({modalStatusFilter.length})
                             </button>
@@ -1017,14 +1021,14 @@ export default function Reports() {
                                   setModalStatusFilter([...modalStatusFilter, st]);
                                 }
                               }}
-                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all hover:bg-white/5 ${
+                              className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${
                                 isSelected ? 'bg-brand-500/10' : ''
                               }`}
                             >
                               <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                                 isSelected 
                                   ? 'bg-brand-500 border-brand-500' 
-                                  : 'border-slate-500 hover:border-slate-300'
+                                  : 'border-slate-400 dark:border-slate-500'
                               }`}>
                                 {isSelected && (
                                   <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -1033,7 +1037,7 @@ export default function Reports() {
                                 )}
                               </div>
                               <span className={`text-xs font-semibold ${
-                                isSelected ? 'text-white' : 'text-slate-300'
+                                isSelected ? 'text-black dark:text-white' : 'text-slate-700 dark:text-slate-300'
                               }`}>{st}</span>
                             </div>
                           );
@@ -1046,50 +1050,53 @@ export default function Reports() {
                 {/* Renewal Date Dropdown & Calendar Range Filter */}
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <select
+                    <GlassSelect
                       value={modalDateFilter}
-                      onChange={(e) => setModalDateFilter(e.target.value)}
-                      className="px-3 py-2 bg-slate-900 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
-                    >
-                      <option value="All">All Renewal Dates</option>
-                      <option value="this_month">This Month</option>
-                      <option value="next_month">Next Month</option>
-                      <option value="30_days">Next 30 Days</option>
-                      <option value="60_days">Next 60 Days</option>
-                      <option value="90_days">Next 90 Days</option>
-                      <option value="expired">Expired / Past Due</option>
-                      <option value="custom">📅 Custom Date Range...</option>
-                    </select>
+                      onChange={(e, val) => setModalDateFilter(val !== undefined ? val : e.target.value)}
+                      icon={Calendar}
+                      size="sm"
+                      options={[
+                        { value: 'All', label: 'All Renewal Dates' },
+                        { value: 'this_month', label: 'This Month' },
+                        { value: 'next_month', label: 'Next Month' },
+                        { value: '30_days', label: 'Next 30 Days' },
+                        { value: '60_days', label: 'Next 60 Days' },
+                        { value: '90_days', label: 'Next 90 Days' },
+                        { value: 'expired', label: 'Expired / Past Due' },
+                        { value: 'custom', label: '📅 Custom Date Range...' },
+                      ]}
+                    />
                   </div>
 
                   {modalDateFilter === 'custom' && (
-                    <div className="flex items-center gap-2 bg-slate-900/90 border border-emerald-500/40 px-3 py-1 rounded-xl backdrop-blur-md">
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 bg-slate-900/90 border border-emerald-500/40 px-3 py-1.5 rounded-2xl backdrop-blur-md">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase font-bold text-slate-400">From:</span>
-                        <input
-                          type="date"
+                        <GlassDatePicker
                           value={modalStartDate}
-                          onChange={(e) => setModalStartDate(e.target.value)}
-                          style={{ colorScheme: 'dark' }}
-                          className="bg-slate-800 text-white text-xs px-2 py-1 rounded-lg border border-white/10 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          onChange={(e, val) => setModalStartDate(val !== undefined ? val : e.target.value)}
+                          outputFormat="YYYY-MM-DD"
+                          placeholder="From date"
+                          size="xs"
+                          className="min-w-[110px]"
                         />
                       </div>
                       <span className="text-slate-500 font-bold">-</span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase font-bold text-slate-400">To:</span>
-                        <input
-                          type="date"
+                        <GlassDatePicker
                           value={modalEndDate}
-                          onChange={(e) => setModalEndDate(e.target.value)}
-                          style={{ colorScheme: 'dark' }}
-                          className="bg-slate-800 text-white text-xs px-2 py-1 rounded-lg border border-white/10 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          onChange={(e, val) => setModalEndDate(val !== undefined ? val : e.target.value)}
+                          outputFormat="YYYY-MM-DD"
+                          placeholder="To date"
+                          size="xs"
+                          className="min-w-[110px]"
                         />
                       </div>
                       {(modalStartDate || modalEndDate) && (
                         <button
                           onClick={() => { setModalStartDate(''); setModalEndDate(''); }}
-                          className="text-[11px] text-rose-400 hover:text-rose-300 font-bold ml-1"
+                          className="text-[11px] text-rose-400 hover:text-rose-300 font-bold ml-1 cursor-pointer"
                           title="Clear date range"
                         >
                           Clear
@@ -1417,37 +1424,39 @@ export default function Reports() {
                       <th className="px-4 py-3 text-center">
                         <div className="inline-flex items-center gap-1 justify-center">
                           <span>Status</span>
-                          <select
+                          <GlassSelect
                             value={modalStatusFilter}
-                            onChange={(e) => setModalStatusFilter(e.target.value)}
-                            className="bg-slate-800/80 border border-white/20 rounded px-1 py-0.5 text-[10px] font-bold text-brand-400 focus:outline-none cursor-pointer uppercase hover:text-white transition-colors ml-1"
-                            title="Filter by Status"
-                          >
-                            <option value="All" className="bg-slate-900 text-white">All</option>
-                            <option value="Active" className="bg-slate-900 text-emerald-400">Active</option>
-                            <option value="Pending Renewal" className="bg-slate-900 text-amber-400">Pending</option>
-                            <option value="Renewed" className="bg-slate-900 text-blue-400">Renewed</option>
-                            <option value="Expired" className="bg-slate-900 text-rose-400">Expired</option>
-                          </select>
+                            onChange={(e, val) => setModalStatusFilter(val !== undefined ? val : e.target.value)}
+                            size="xs"
+                            className="min-w-[80px]"
+                            options={[
+                              { value: 'All', label: 'All' },
+                              { value: 'Active', label: 'Active' },
+                              { value: 'Pending Renewal', label: 'Pending' },
+                              { value: 'Renewed', label: 'Renewed' },
+                              { value: 'Expired', label: 'Expired' },
+                            ]}
+                          />
                         </div>
                       </th>
                       <th className="px-4 py-3 text-left">
                         <div className="inline-flex items-center gap-1">
                           <span>Renewal Date</span>
-                          <select
+                          <GlassSelect
                             value={modalDateFilter}
-                            onChange={(e) => setModalDateFilter(e.target.value)}
-                            className="bg-slate-800/80 border border-white/20 rounded px-1 py-0.5 text-[10px] font-bold text-brand-400 focus:outline-none cursor-pointer uppercase hover:text-white transition-colors ml-1"
-                            title="Filter by Renewal Date"
-                          >
-                            <option value="All" className="bg-slate-900 text-white">All</option>
-                            <option value="this_month" className="bg-slate-900 text-slate-200">This Month</option>
-                            <option value="next_month" className="bg-slate-900 text-slate-200">Next Month</option>
-                            <option value="30_days" className="bg-slate-900 text-slate-200">30 Days</option>
-                            <option value="60_days" className="bg-slate-900 text-slate-200">60 Days</option>
-                            <option value="90_days" className="bg-slate-900 text-slate-200">90 Days</option>
-                            <option value="expired" className="bg-slate-900 text-rose-400">Expired</option>
-                          </select>
+                            onChange={(e, val) => setModalDateFilter(val !== undefined ? val : e.target.value)}
+                            size="xs"
+                            className="min-w-[90px]"
+                            options={[
+                              { value: 'All', label: 'All' },
+                              { value: 'this_month', label: 'This Month' },
+                              { value: 'next_month', label: 'Next Month' },
+                              { value: '30_days', label: '30 Days' },
+                              { value: '60_days', label: '60 Days' },
+                              { value: '90_days', label: '90 Days' },
+                              { value: 'expired', label: 'Expired' },
+                            ]}
+                          />
                         </div>
                       </th>
                       <th className="px-4 py-3 text-right">Contract Value</th>

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Users, Plus, X, Loader2, Trash2 } from 'lucide-react';
+import GlassSelect from '../components/GlassSelect';
 
 const GROUPS = [
   {
@@ -216,15 +217,16 @@ export default function UserManagement() {
                         {changingRole[u.id] ? (
                           <Loader2 className="w-4 h-4 animate-spin text-surface-400" />
                         ) : (
-                          <select
+                          <GlassSelect
                             value={u.role}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value, u.full_name)}
+                            onChange={(e, val) => handleRoleChange(u.id, val !== undefined ? val : e.target.value, u.full_name)}
                             disabled={u.id === user?.id}
-                            className="text-xs font-medium px-2 py-1.5 pr-6 rounded-lg border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-700 dark:text-surface-200 cursor-pointer outline-none appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <option value="sales">CST / Sales</option>
-                            <option value="admin">Admin</option>
-                          </select>
+                            size="xs"
+                            options={[
+                              { value: 'sales', label: 'CST / Sales' },
+                              { value: 'admin', label: 'Admin' },
+                            ]}
+                          />
                         )}
                       </div>
                       {/* Remove */}
@@ -342,15 +344,17 @@ export default function UserManagement() {
                 <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1.5">
                   Role / Group
                 </label>
-                <select
+                <GlassSelect
                   value={form.role}
-                  onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-surface-200 dark:border-surface-600 bg-surface-50 dark:bg-surface-700 text-surface-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                  onChange={(e, val) => setForm(p => ({ ...p, role: val !== undefined ? val : e.target.value }))}
+                  size="md"
+                  options={[
+                    { value: 'sales', label: 'CST / Sales' },
+                    { value: 'admin', label: 'Admin' },
+                  ]}
+                  className="w-full"
                   required
-                >
-                  <option value="sales">CST / Sales</option>
-                  <option value="admin">Admin</option>
-                </select>
+                />
               </div>
 
               <div className="flex gap-3 pt-1">

@@ -8,20 +8,31 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor-react';
+            if (id.includes('three')) {
+              return 'vendor-three';
             }
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons';
-            }
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
+            if (id.includes('xlsx')) {
+              return 'vendor-xlsx';
             }
             if (id.includes('jspdf') || id.includes('html2canvas')) {
               return 'vendor-pdf';
             }
-            if (id.includes('framer-motion')) {
-              return 'vendor-motion';
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('@visx')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('framer-motion') || id.includes('gsap') || id.includes('@react-spring')) {
+              return 'vendor-animation';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router') ||
+              id.includes('/scheduler/')
+            ) {
+              return 'vendor-react';
             }
           }
         },

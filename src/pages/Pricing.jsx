@@ -41,6 +41,7 @@ import {
   LayoutGrid,
   Table as TableIcon
 } from 'lucide-react';
+import GlassSelect from '../components/GlassSelect';
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#6366f1'];
 
@@ -697,17 +698,15 @@ export default function Pricing() {
 
           {/* Service Plan Filter Select */}
           <div className="relative">
-            <select
+            <GlassSelect
               value={selectedServicePlan}
-              onChange={(e) => setSelectedServicePlan(e.target.value)}
-              className="pl-3 pr-7 py-2 rounded-xl text-xs font-semibold bg-white/70 dark:bg-surface-800/70 border border-surface-200/60 dark:border-surface-700/60 focus:outline-none focus:ring-2 focus:ring-brand-500 text-surface-700 dark:text-surface-200 cursor-pointer appearance-none"
-            >
-              <option value="all">All Service Plans</option>
-              {servicePlansList.filter(sp => sp !== 'all').map(sp => (
-                <option key={sp} value={sp}>{sp}</option>
-              ))}
-            </select>
-            <Sliders className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+              onChange={(e, val) => setSelectedServicePlan(val || e.target.value)}
+              options={[
+                { value: 'all', label: 'All Service Plans' },
+                ...servicePlansList.filter(sp => sp !== 'all').map(sp => ({ value: sp, label: sp })),
+              ]}
+              className="min-w-[170px]"
+            />
           </div>
 
           {/* Search Bar */}
@@ -863,33 +862,31 @@ export default function Pricing() {
                     <th className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <span>Vendor & Product</span>
-                        <select
+                        <GlassSelect
                           value={selectedVendor}
-                          onChange={(e) => setSelectedVendor(e.target.value)}
-                          className="bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 text-[10px] font-semibold py-0.5 px-2 rounded-lg border border-surface-300 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer normal-case tracking-normal"
-                          title="Filter Vendor & Product column"
-                        >
-                          <option value="all">Vendor: All</option>
-                          {vendorsList.filter(v => v !== 'all').map(v => (
-                            <option key={v} value={v}>{v}</option>
-                          ))}
-                        </select>
+                          onChange={(e, val) => setSelectedVendor(val || e.target.value)}
+                          options={[
+                            { value: 'all', label: 'Vendor: All' },
+                            ...vendorsList.filter(v => v !== 'all').map(v => ({ value: v, label: v })),
+                          ]}
+                          size="xs"
+                          className="min-w-[110px]"
+                        />
                       </div>
                     </th>
                     <th className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <span>Service Plan</span>
-                        <select
+                        <GlassSelect
                           value={selectedServicePlan}
-                          onChange={(e) => setSelectedServicePlan(e.target.value)}
-                          className="bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 text-[10px] font-semibold py-0.5 px-2 rounded-lg border border-surface-300 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer normal-case tracking-normal"
-                          title="Filter Service Plan column"
-                        >
-                          <option value="all">Plan: All</option>
-                          {servicePlansList.filter(sp => sp !== 'all').map(sp => (
-                            <option key={sp} value={sp}>{sp}</option>
-                          ))}
-                        </select>
+                          onChange={(e, val) => setSelectedServicePlan(val || e.target.value)}
+                          options={[
+                            { value: 'all', label: 'Plan: All' },
+                            ...servicePlansList.filter(sp => sp !== 'all').map(sp => ({ value: sp, label: sp })),
+                          ]}
+                          size="xs"
+                          className="min-w-[110px]"
+                        />
                       </div>
                     </th>
                     <th className="px-4 py-3.5 text-right">Purchase Cost (Cost %)</th>
@@ -1047,25 +1044,24 @@ export default function Pricing() {
                 <div>
                   <label className="block font-semibold text-surface-700 dark:text-surface-300 mb-1">Vendor Name *</label>
                   {!isCustomVendor ? (
-                    <select
-                      required
+                    <GlassSelect
                       value={formData.vendor}
-                      onChange={(e) => {
-                        if (e.target.value === '__other__') {
+                      placeholder="Select Vendor"
+                      options={[
+                        ...availableVendors.map((v) => ({ value: v, label: v })),
+                        { value: '__other__', label: '➕ Other (Type Custom Vendor...)' },
+                      ]}
+                      onChange={(e, val) => {
+                        const v = val !== undefined ? val : e.target.value;
+                        if (v === '__other__') {
                           setIsCustomVendor(true);
                           setFormData({ ...formData, vendor: '' });
                         } else {
-                          setFormData({ ...formData, vendor: e.target.value });
+                          setFormData({ ...formData, vendor: v });
                         }
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-surface-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-medium"
-                    >
-                      <option value="">Select Vendor</option>
-                      {availableVendors.map((v) => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                      <option value="__other__">➕ Other (Type Custom Vendor...)</option>
-                    </select>
+                      className="w-full"
+                    />
                   ) : (
                     <div className="space-y-1">
                       <input
@@ -1091,24 +1087,24 @@ export default function Pricing() {
                 <div>
                   <label className="block font-semibold text-surface-700 dark:text-surface-300 mb-1">Service Plan</label>
                   {!isCustomServicePlan ? (
-                    <select
+                    <GlassSelect
                       value={formData.service_category}
-                      onChange={(e) => {
-                        if (e.target.value === '__other__') {
+                      placeholder="Select Service Plan"
+                      options={[
+                        ...availableServicePlans.map((sp) => ({ value: sp, label: sp })),
+                        { value: '__other__', label: '➕ Other (Type Custom Plan...)' },
+                      ]}
+                      onChange={(e, val) => {
+                        const sp = val !== undefined ? val : e.target.value;
+                        if (sp === '__other__') {
                           setIsCustomServicePlan(true);
                           setFormData({ ...formData, service_category: '' });
                         } else {
-                          setFormData({ ...formData, service_category: e.target.value });
+                          setFormData({ ...formData, service_category: sp });
                         }
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-surface-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-medium"
-                    >
-                      <option value="">Select Service Plan</option>
-                      {availableServicePlans.map((sp) => (
-                        <option key={sp} value={sp}>{sp}</option>
-                      ))}
-                      <option value="__other__">➕ Other (Type Custom Plan...)</option>
-                    </select>
+                      className="w-full"
+                    />
                   ) : (
                     <div className="space-y-1">
                       <input

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDateTime } from '../utils/formatters';
+import GlassSelect from '../components/GlassSelect';
+import GlassDatePicker from '../components/GlassDatePicker';
 
 export default function EmailAutomation() {
   const { user, token } = useAuth();
@@ -434,28 +436,28 @@ export default function EmailAutomation() {
               <div className="flex flex-wrap items-center gap-3">
                 {/* Month Dropdown */}
                 <div className="relative">
-                  <select
+                  <GlassSelect
                     value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="appearance-none bg-surface-50 dark:bg-surface-800/70 border border-surface-200 dark:border-surface-700 text-surface-800 dark:text-surface-200 text-xs font-semibold rounded-xl pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  >
-                    <option value="all">🗓️ All Months</option>
-                    {availableMonths.map(m => (
-                      <option key={m} value={m}>
-                        {formatMonthLabel(m)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-2.5 pointer-events-none text-surface-400" />
+                    onChange={(e, val) => setSelectedMonth(val !== undefined ? val : e.target.value)}
+                    size="sm"
+                    options={[
+                      { value: 'all', label: '🗓️ All Months' },
+                      ...availableMonths.map(m => ({
+                        value: m,
+                        label: formatMonthLabel(m),
+                      }))
+                    ]}
+                  />
                 </div>
 
                 {/* Date Picker */}
                 <div className="relative">
-                  <input
-                    type="date"
+                  <GlassDatePicker
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-surface-50 dark:bg-surface-800/70 border border-surface-200 dark:border-surface-700 text-surface-800 dark:text-surface-200 text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    onChange={(e, val) => setSelectedDate(val !== undefined ? val : e.target.value)}
+                    outputFormat="YYYY-MM-DD"
+                    placeholder="Specific Date..."
+                    size="sm"
                   />
                 </div>
 

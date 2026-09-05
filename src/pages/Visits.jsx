@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import IndianDateInput from '../components/IndianDateInput';
+import GlassSelect from '../components/GlassSelect';
 
 // Loader helper for Leaflet.js CDN
 const loadLeaflet = () => {
@@ -700,18 +701,19 @@ function CSTVisitModule({ token, user }) {
                 <label className="block text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400 mb-1.5">
                   Select Customer Renewal
                 </label>
-                <select
+                <GlassSelect
                   value={selectedRenewalId}
-                  onChange={(e) => setSelectedRenewalId(e.target.value)}
-                  className="w-full px-3 py-2 border border-surface-300 dark:border-surface-700 rounded-lg bg-white dark:bg-surface-800 text-surface-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500/20"
-                >
-                  <option value="">-- Choose Client --</option>
-                  {renewals.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.client_name} - {r.service} ({r.unique_id})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(e, val) => setSelectedRenewalId(val !== undefined ? val : e.target.value)}
+                  placeholder="-- Choose Client --"
+                  options={[
+                    { value: '', label: '-- Choose Client --' },
+                    ...renewals.map(r => ({
+                      value: r.id,
+                      label: `${r.client_name} - ${r.service} (${r.unique_id})`,
+                    }))
+                  ]}
+                  className="w-full text-sm"
+                />
               </div>
 
               <button
@@ -1338,17 +1340,19 @@ function AdminVisitModule({ token, user }) {
           </div>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-surface-450 mb-1">Visit Status</label>
-            <select 
+            <GlassSelect 
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-1.5 border border-surface-300 dark:border-surface-700 rounded-lg bg-white dark:bg-surface-800 text-surface-900 dark:text-white text-xs outline-none"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Started (Ongoing)</option>
-              <option value="checked_in">Checked In</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+              onChange={(e, val) => setFilterStatus(val !== undefined ? val : e.target.value)}
+              size="sm"
+              options={[
+                { value: 'all', label: 'All Statuses' },
+                { value: 'active', label: 'Started (Ongoing)' },
+                { value: 'checked_in', label: 'Checked In' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+              className="w-full"
+            />
           </div>
         </div>
 

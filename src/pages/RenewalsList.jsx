@@ -14,6 +14,8 @@ import RenewActionModal from '../components/RenewActionModal';
 import ClientDetailsModal from '../components/ClientDetailsModal';
 import InvoiceDetailsModal from '../components/InvoiceDetailsModal';
 import IndianDateInput from '../components/IndianDateInput';
+import GlassSelect from '../components/GlassSelect';
+import GlassDatePicker from '../components/GlassDatePicker';
 
 const normalizeHeader = (h) => {
   const clean = h.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -159,10 +161,10 @@ const ClientFilterDropdown = ({ value = [], onChange, clientList = [], isOpen, o
         type="button"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={onToggle}
-        className={`ml-1.5 p-0.5 rounded transition-colors cursor-pointer ${
+        className={`ml-1.5 p-1 rounded-lg transition-all duration-200 cursor-pointer border ${
           isActive
-            ? 'text-brand-500 dark:text-brand-400 font-bold bg-brand-50 dark:bg-brand-900/30'
-            : 'text-surface-300 dark:text-surface-600 hover:text-surface-500'
+            ? 'text-brand-600 dark:text-brand-300 font-bold bg-brand-500/15 border-brand-500/40 shadow-sm'
+            : 'text-surface-400 dark:text-surface-500 hover:text-surface-900 dark:hover:text-white bg-white/40 dark:bg-white/5 border-white/40 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/10 shadow-sm'
         }`}
         title={isActive ? `Filtered by ${valueArray.length} client(s)` : 'Filter Client Info'}
       >
@@ -175,7 +177,7 @@ const ClientFilterDropdown = ({ value = [], onChange, clientList = [], isOpen, o
         <div 
           ref={filterRef}
           style={{ position: 'fixed', top: `${filterPos.top}px`, left: `${filterPos.left}px`, zIndex: 99999 }}
-          className="bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl shadow-2xl min-w-[260px] max-w-[320px] max-h-96 overflow-hidden flex flex-col p-3 animate-in fade-in slide-in-from-top-1 duration-150"
+          className="dropdown-menu-glass min-w-[260px] max-w-[320px] max-h-96 overflow-hidden flex flex-col p-3 animate-in fade-in slide-in-from-top-1 duration-150"
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -354,10 +356,10 @@ const FilterDropdown = ({ col, value = [], onChange, options = [], isOpen, onTog
         type="button"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={onToggle}
-        className={`ml-1.5 p-0.5 rounded transition-colors cursor-pointer ${
+        className={`ml-1.5 p-1 rounded-lg transition-all duration-200 cursor-pointer border ${
           isActive
-            ? 'text-brand-500 dark:text-brand-400 font-bold bg-brand-50 dark:bg-brand-900/30'
-            : 'text-surface-300 dark:text-surface-600 hover:text-surface-500'
+            ? 'text-brand-600 dark:text-brand-300 font-bold bg-brand-500/15 border-brand-500/40 shadow-sm'
+            : 'text-surface-400 dark:text-surface-500 hover:text-surface-900 dark:hover:text-white bg-white/40 dark:bg-white/5 border-white/40 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/10 shadow-sm'
         }`}
         title={isActive ? `Filter active (${valueArray.length})` : 'Filter'}
       >
@@ -369,7 +371,7 @@ const FilterDropdown = ({ col, value = [], onChange, options = [], isOpen, onTog
         <div 
           ref={filterRef}
           style={{ position: 'fixed', top: `${filterPos.top}px`, left: `${filterPos.left}px`, zIndex: 99999 }}
-          className="bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl shadow-2xl w-max min-w-[210px] max-w-[320px] max-h-96 overflow-hidden flex flex-col p-3 animate-in fade-in slide-in-from-top-1 duration-150 select-none"
+          className="dropdown-menu-glass w-max min-w-[210px] max-w-[320px] max-h-96 overflow-hidden flex flex-col p-3 animate-in fade-in slide-in-from-top-1 duration-150 select-none"
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1748,31 +1750,32 @@ export default function RenewalsList() {
           </div>
           
           <div className="relative flex-shrink-0">
-            <select 
+            <GlassSelect 
               value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="input-field pl-8 pr-7 text-xs py-1.5 appearance-none bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-            >
-              <option value="all" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">All Statuses</option>
-              <option value="Active" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Active</option>
-              <option value="Pending Renewal" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Pending Renewal</option>
-              <option value="Expired" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Expired</option>
-              <option value="Renewed" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Renewed</option>
-            </select>
-            <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-surface-400 pointer-events-none z-10" />
+              onChange={(e, val) => handleStatusChange(val !== undefined ? val : e.target.value)}
+              options={[
+                { value: 'all', label: 'All Statuses' },
+                { value: 'Active', label: 'Active' },
+                { value: 'Pending Renewal', label: 'Pending Renewal' },
+                { value: 'Expired', label: 'Expired' },
+                { value: 'Renewed', label: 'Renewed' },
+              ]}
+              icon={Filter}
+              size="sm"
+            />
           </div>
 
           {/* Column Visibility Popover */}
           <div className="relative" ref={columnPickerRef}>
             <button 
               onClick={() => setShowColumnPicker(prev => !prev)}
-              className={`btn-secondary flex-shrink-0 flex items-center gap-1.5 py-1.5 px-2.5 text-xs transition-colors ${showColumnPicker ? 'bg-surface-200 dark:bg-surface-700 text-surface-900 dark:text-white border-surface-300 dark:border-surface-600' : ''}`}
+              className={`dropdown-btn-glass flex-shrink-0 flex items-center gap-1.5 py-1.5 px-2.5 text-xs ${showColumnPicker ? 'bg-white/80 dark:bg-white/20' : ''}`}
               title="Show/Hide Columns"
             >
               <Columns className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" /> Columns
             </button>
             {showColumnPicker && (
-              <div className="absolute right-0 mt-2 w-64 bg-white/95 dark:bg-surface-800/95 backdrop-blur-md rounded-2xl shadow-2xl border border-surface-200/80 dark:border-surface-700/80 z-50 p-3.5 text-xs animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 mt-2 w-64 dropdown-menu-glass z-50 p-3.5 text-xs animate-in fade-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-surface-100 dark:border-surface-700/80">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-surface-900 dark:text-white">Show/Hide Columns</span>
@@ -2517,27 +2520,21 @@ export default function RenewalsList() {
                     {visibleCols.renewed && (
                       <td className={`px-1.5 text-center overflow-hidden ${isCompact ? 'py-1' : 'py-1.5'}`}>
                         {((isSales || isAdmin) && !(row.renewal_confirmation === 'renewed' && row.days_left !== null && row.days_left !== undefined && row.days_left > 30)) ? (
-                          <select
+                          <GlassSelect
                             value={row.renewal_confirmation || 'pending'}
-                            onChange={(e) => handleRenewalConfirmation(row.id, e.target.value)}
-                            className={`text-[10px] font-medium px-1 py-0.5 rounded-lg border cursor-pointer outline-none transition-all w-full truncate ${
-                              (row.renewal_confirmation === 'reminder_sent' || row.renewal_confirmation === 'awaiting_with_vendor') ? 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-900/20 dark:text-sky-400' :
-                              (row.renewal_confirmation === 'quote_sent' || row.renewal_confirmation === 'quotation_confirmation') ? 'bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-900/20 dark:text-indigo-400' :
-                              row.renewal_confirmation === 'awaiting_client_approval' ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400' :
-                              row.renewal_confirmation === 'renewed' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400' :
-                              row.renewal_confirmation === 'lost' ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-900/20 dark:text-rose-400' :
-                              (row.renewal_confirmation === 'cancelled' || row.renewal_confirmation === 'service_discontinued') ? 'bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400' :
-                              'bg-surface-100 text-surface-500 border-surface-300 dark:bg-surface-700 dark:text-surface-200'
-                            }`}
-                          >
-                            <option value="pending" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Pending</option>
-                            <option value="reminder_sent" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Reminder Sent</option>
-                            <option value="quote_sent" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Quote Sent</option>
-                            <option value="awaiting_client_approval" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Awaiting Client Approval</option>
-                            <option value="renewed" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Renewed</option>
-                            <option value="lost" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Lost</option>
-                            <option value="cancelled" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Cancelled</option>
-                          </select>
+                            onChange={(e, val) => handleRenewalConfirmation(row.id, val !== undefined ? val : e.target.value)}
+                            size="xs"
+                            className="w-full text-center"
+                            options={[
+                              { value: 'pending', label: 'Pending' },
+                              { value: 'reminder_sent', label: 'Reminder Sent' },
+                              { value: 'quote_sent', label: 'Quote Sent' },
+                              { value: 'awaiting_client_approval', label: 'Awaiting Approval' },
+                              { value: 'renewed', label: 'Renewed' },
+                              { value: 'lost', label: 'Lost' },
+                              { value: 'cancelled', label: 'Cancelled' },
+                            ]}
+                          />
                         ) : (
                           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border inline-block truncate max-w-full ${getRenewalConfirmationBadge(row.renewal_confirmation).color}`}>
                             {getRenewalConfirmationBadge(row.renewal_confirmation).label}
@@ -2550,18 +2547,16 @@ export default function RenewalsList() {
                     {visibleCols.invoice && (
                       <td className={`px-1.5 text-center overflow-hidden ${isCompact ? 'py-1' : 'py-1.5'}`}>
                         {(isSales || isAdmin) ? (
-                          <select
+                          <GlassSelect
                             value={row.invoice_status || 'Not'}
-                            onChange={(e) => handleInvoiceStatus(row.id, e.target.value)}
-                            className={`text-[10px] font-medium px-1 py-0.5 rounded-md border cursor-pointer outline-none transition-all w-full max-w-[64px] mx-auto block ${
-                              row.invoice_status === 'Sent'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                : 'bg-surface-100 text-surface-500 border-surface-300 dark:bg-surface-700 dark:text-surface-200'
-                            }`}
-                          >
-                            <option value="Not" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Not</option>
-                            <option value="Sent" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Sent</option>
-                          </select>
+                            onChange={(e, val) => handleInvoiceStatus(row.id, val !== undefined ? val : e.target.value)}
+                            size="xs"
+                            className="w-full max-w-[72px] mx-auto block"
+                            options={[
+                              { value: 'Not', label: 'Not' },
+                              { value: 'Sent', label: 'Sent' },
+                            ]}
+                          />
                         ) : (
                           <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium border w-full max-w-[64px] mx-auto block text-center truncate ${
                             row.invoice_status === 'Sent'
@@ -2578,18 +2573,16 @@ export default function RenewalsList() {
                     {visibleCols.payment && (
                       <td className={`px-1.5 text-center overflow-hidden ${isCompact ? 'py-1' : 'py-1.5'}`}>
                         {(isSales || isAdmin) ? (
-                          <select
+                          <GlassSelect
                             value={row.payment_status || 'No'}
-                            onChange={(e) => handlePaymentStatus(row.id, e.target.value)}
-                            className={`text-[10px] font-medium px-1 py-0.5 rounded-md border cursor-pointer outline-none transition-all w-full max-w-[64px] mx-auto block ${
-                              row.payment_status === 'Yes'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                : 'bg-surface-100 text-surface-500 border-surface-300 dark:bg-surface-700 dark:text-surface-200'
-                            }`}
-                          >
-                            <option value="No" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">No</option>
-                            <option value="Yes" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Yes</option>
-                          </select>
+                            onChange={(e, val) => handlePaymentStatus(row.id, val !== undefined ? val : e.target.value)}
+                            size="xs"
+                            className="w-full max-w-[72px] mx-auto block"
+                            options={[
+                              { value: 'No', label: 'No' },
+                              { value: 'Yes', label: 'Yes' },
+                            ]}
+                          />
                         ) : (
                           <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium border w-full max-w-[64px] mx-auto block text-center truncate ${
                             row.payment_status === 'Yes'
@@ -2817,29 +2810,14 @@ export default function RenewalsList() {
                 <label className="block text-sm font-semibold text-surface-700 dark:text-surface-300 mb-2">
                   new renewal date
                 </label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="DD/MM/YYYY" 
-                    required 
-                    value={newRenewalDate} 
-                    onChange={handleNewRenewalDateChange} 
-                    className="w-full pl-3 pr-10 py-2 border border-surface-300 dark:border-surface-700 rounded-lg bg-white dark:bg-surface-700 text-surface-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500" 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => datePickerRef.current?.showPicker()}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 dark:hover:text-white"
-                  >
-                    <Calendar className="w-5 h-5" />
-                  </button>
-                  <input 
-                    type="date"
-                    ref={datePickerRef}
-                    onChange={handleNativeDateSelect}
-                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-                  />
-                </div>
+                <GlassDatePicker 
+                  placeholder="DD/MM/YYYY" 
+                  required 
+                  value={newRenewalDate} 
+                  outputFormat="DD/MM/YYYY"
+                  onChange={(e, val) => setNewRenewalDate(val !== undefined ? val : e.target.value)} 
+                  className="w-full" 
+                />
               </div>
               
               <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900 p-4 rounded-lg">
@@ -3005,35 +2983,39 @@ export default function RenewalsList() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1">Renewal Status</label>
-                <select 
+                <GlassSelect 
                   value={bulkStatusValue} 
-                  onChange={(e) => setBulkStatusValue(e.target.value)}
-                  className="input-field w-full py-2 text-xs bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="">-- No Change --</option>
-                  <option value="Active">Active</option>
-                  <option value="Pending Renewal">Pending Renewal</option>
-                  <option value="Renewed">Renewed</option>
-                  <option value="Expired">Expired</option>
-                </select>
+                  onChange={(e, val) => setBulkStatusValue(val !== undefined ? val : e.target.value)}
+                  placeholder="-- No Change --"
+                  options={[
+                    { value: '', label: '-- No Change --' },
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Pending Renewal', label: 'Pending Renewal' },
+                    { value: 'Renewed', label: 'Renewed' },
+                    { value: 'Expired', label: 'Expired' },
+                  ]}
+                  className="w-full"
+                />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-surface-700 dark:text-surface-300 mb-1">Renewal Confirmation</label>
-                <select 
+                <GlassSelect 
                   value={bulkConfirmationValue} 
-                  onChange={(e) => setBulkConfirmationValue(e.target.value)}
-                  className="input-field w-full py-2 text-xs bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="">-- No Change --</option>
-                  <option value="pending">Pending</option>
-                  <option value="reminder_sent">Reminder Sent</option>
-                  <option value="quote_sent">Quote Sent</option>
-                  <option value="awaiting_client_approval">Awaiting Client Approval</option>
-                  <option value="renewed">Renewed</option>
-                  <option value="lost">Lost</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  onChange={(e, val) => setBulkConfirmationValue(val !== undefined ? val : e.target.value)}
+                  placeholder="-- No Change --"
+                  options={[
+                    { value: '', label: '-- No Change --' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'reminder_sent', label: 'Reminder Sent' },
+                    { value: 'quote_sent', label: 'Quote Sent' },
+                    { value: 'awaiting_client_approval', label: 'Awaiting Client Approval' },
+                    { value: 'renewed', label: 'Renewed' },
+                    { value: 'lost', label: 'Lost' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ]}
+                  className="w-full"
+                />
               </div>
             </div>
 

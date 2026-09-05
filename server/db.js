@@ -20,6 +20,9 @@ pool.on('connect', (client) => {
 export const initDb = async () => {
   try {
     await pool.query(`
+      CREATE SCHEMA IF NOT EXISTS marslab_schema;
+      CREATE SCHEMA IF NOT EXISTS client_tracking_schema;
+
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
@@ -563,143 +566,149 @@ export const initDb = async () => {
     // No auto-seeding. All users are created manually via User Management.
     // Users removed from the application are permanently deleted from the database.
 
-    console.log('PostgreSQL database tables initialized');
-
-    // Create DB-level triggers to auto-sync visits and locations from client_tracking_schema to marslab_schema
-    await pool.query(`
-      CREATE OR REPLACE FUNCTION client_tracking_schema.sync_visit_to_rms_trigger_fn()
-      RETURNS TRIGGER AS $$
-      DECLARE
-          target_renewal_id INTEGER;
-          target_cst_id INTEGER;
-      BEGIN
-          -- 1. Find corresponding rms_renewal_id
-          SELECT rms_renewal_id INTO target_renewal_id 
-          FROM client_tracking_schema.renewals 
-          WHERE id = NEW.renewal_id;
-
-          -- 2. Find corresponding rms_user_id
-          SELECT rms_user_id INTO target_cst_id 
-          FROM client_tracking_schema.users 
-          WHERE id = NEW.cst_id;
-
-          -- 3. If target_renewal_id or target_cst_id are NULL, try fallback matching
-          IF target_renewal_id IS NULL THEN
-              SELECT id INTO target_renewal_id 
-              FROM marslab_schema.renewals 
-              WHERE unique_id = (SELECT unique_id FROM client_tracking_schema.renewals WHERE id = NEW.renewal_id);
-          END IF;
-
-          IF target_cst_id IS NULL THEN
-              SELECT id INTO target_cst_id 
-              FROM marslab_schema.users 
-              WHERE email = (SELECT email FROM client_tracking_schema.users WHERE id = NEW.cst_id);
-          END IF;
-
-          -- 4. If we still don't have IDs, we cannot sync
-          IF target_renewal_id IS NULL OR target_cst_id IS NULL THEN
-              RAISE WARNING 'Cannot sync visit %: target_renewal_id=%, target_cst_id=%', NEW.id, target_renewal_id, target_cst_id;
-              RETURN NEW;
-          END IF;
-
-          -- 5. Insert or Update marslab_schema.visits
-          INSERT INTO marslab_schema.visits (
-              id, renewal_id, cst_id, status, start_time, arrival_time, check_in_time,
-              check_out_time, start_latitude, start_longitude, client_reached,
-              arrival_latitude, arrival_longitude, arrival_distance_meters, notes,
-              photo_data, created_at, updated_at,
-              distance_km, signature_data, checklist_data, voice_note_data,
-              location_override, location_override_reason
-          ) VALUES (
-              NEW.id, target_renewal_id, target_cst_id, NEW.status, NEW.start_time, NEW.arrival_time, NEW.check_in_time,
-              NEW.check_out_time, NEW.start_latitude, NEW.start_longitude, NEW.client_reached,
-              NEW.arrival_latitude, NEW.arrival_longitude, NEW.arrival_distance_meters, NEW.notes,
-              NEW.photo_data, NEW.created_at, NEW.updated_at,
-              NEW.distance_km, NEW.signature_data, NEW.checklist_data, NEW.voice_note_data,
-              NEW.location_override, NEW.location_override_reason
-          )
-          ON CONFLICT (id) DO UPDATE SET
-              renewal_id = EXCLUDED.renewal_id,
-              cst_id = EXCLUDED.cst_id,
-              status = EXCLUDED.status,
-              arrival_time = EXCLUDED.arrival_time,
-              check_in_time = EXCLUDED.check_in_time,
-              check_out_time = EXCLUDED.check_out_time,
-              client_reached = EXCLUDED.client_reached,
-              arrival_latitude = EXCLUDED.arrival_latitude,
-              arrival_longitude = EXCLUDED.arrival_longitude,
-              arrival_distance_meters = EXCLUDED.arrival_distance_meters,
-              notes = EXCLUDED.notes,
-              photo_data = EXCLUDED.photo_data,
-              distance_km = EXCLUDED.distance_km,
-              signature_data = EXCLUDED.signature_data,
-              checklist_data = EXCLUDED.checklist_data,
-              voice_note_data = EXCLUDED.voice_note_data,
-              location_override = EXCLUDED.location_override,
-              location_override_reason = EXCLUDED.location_override_reason,
-              updated_at = EXCLUDED.updated_at;
-
-          RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      CREATE OR REPLACE FUNCTION client_tracking_schema.sync_visit_delete_to_rms_trigger_fn()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          DELETE FROM marslab_schema.visits WHERE id = OLD.id;
-          RETURN OLD;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      CREATE OR REPLACE FUNCTION client_tracking_schema.sync_location_to_rms_trigger_fn()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          INSERT INTO marslab_schema.visit_locations (
-              id, visit_id, latitude, longitude, accuracy, captured_at
-          ) VALUES (
-              NEW.id, NEW.visit_id, NEW.latitude, NEW.longitude, NEW.accuracy, NEW.captured_at
-          )
-          ON CONFLICT (id) DO UPDATE SET
-              visit_id = EXCLUDED.visit_id,
-              latitude = EXCLUDED.latitude,
-              longitude = EXCLUDED.longitude,
-              accuracy = EXCLUDED.accuracy,
-              captured_at = EXCLUDED.captured_at;
-
-          RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      CREATE OR REPLACE FUNCTION client_tracking_schema.sync_location_delete_to_rms_trigger_fn()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          DELETE FROM marslab_schema.visit_locations WHERE id = OLD.id;
-          RETURN OLD;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      -- Bind triggers
-      DROP TRIGGER IF EXISTS trg_sync_visit_to_rms ON client_tracking_schema.visits;
-      CREATE TRIGGER trg_sync_visit_to_rms
-      AFTER INSERT OR UPDATE ON client_tracking_schema.visits
-      FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_visit_to_rms_trigger_fn();
-
-      DROP TRIGGER IF EXISTS trg_sync_visit_delete_to_rms ON client_tracking_schema.visits;
-      CREATE TRIGGER trg_sync_visit_delete_to_rms
-      AFTER DELETE ON client_tracking_schema.visits
-      FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_visit_delete_to_rms_trigger_fn();
-
-      DROP TRIGGER IF EXISTS trg_sync_location_to_rms ON client_tracking_schema.visit_locations;
-      CREATE TRIGGER trg_sync_location_to_rms
-      AFTER INSERT OR UPDATE ON client_tracking_schema.visit_locations
-      FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_location_to_rms_trigger_fn();
-
-      DROP TRIGGER IF EXISTS trg_sync_location_delete_to_rms ON client_tracking_schema.visit_locations;
-      CREATE TRIGGER trg_sync_location_delete_to_rms
-      AFTER DELETE ON client_tracking_schema.visit_locations
-      FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_location_delete_to_rms_trigger_fn();
+    console.log('PostgreSQL database tables initialized');    // Check if client_tracking_schema.visits table exists before attaching triggers
+    const { rows: ctsVisitsExists } = await pool.query(`
+      SELECT 1 FROM information_schema.tables 
+      WHERE table_schema = 'client_tracking_schema' AND table_name = 'visits'
     `);
-    console.log('✅ CTS-to-RMS Database Triggers configured successfully');
+
+    if (ctsVisitsExists.length > 0) {
+      // Create DB-level triggers to auto-sync visits and locations from client_tracking_schema to marslab_schema
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION client_tracking_schema.sync_visit_to_rms_trigger_fn()
+        RETURNS TRIGGER AS $$
+        DECLARE
+            target_renewal_id INTEGER;
+            target_cst_id INTEGER;
+        BEGIN
+            -- 1. Find corresponding rms_renewal_id
+            SELECT rms_renewal_id INTO target_renewal_id 
+            FROM client_tracking_schema.renewals 
+            WHERE id = NEW.renewal_id;
+
+            -- 2. Find corresponding rms_user_id
+            SELECT rms_user_id INTO target_cst_id 
+            FROM client_tracking_schema.users 
+            WHERE id = NEW.cst_id;
+
+            -- 3. If target_renewal_id or target_cst_id are NULL, try fallback matching
+            IF target_renewal_id IS NULL THEN
+                SELECT id INTO target_renewal_id 
+                FROM marslab_schema.renewals 
+                WHERE unique_id = (SELECT unique_id FROM client_tracking_schema.renewals WHERE id = NEW.renewal_id);
+            END IF;
+
+            IF target_cst_id IS NULL THEN
+                SELECT id INTO target_cst_id 
+                FROM marslab_schema.users 
+                WHERE email = (SELECT email FROM client_tracking_schema.users WHERE id = NEW.cst_id);
+            END IF;
+
+            -- 4. If we still don't have IDs, we cannot sync
+            IF target_renewal_id IS NULL OR target_cst_id IS NULL THEN
+                RAISE WARNING 'Cannot sync visit %: target_renewal_id=%, target_cst_id=%', NEW.id, target_renewal_id, target_cst_id;
+                RETURN NEW;
+            END IF;
+
+            -- 5. Insert or Update marslab_schema.visits
+            INSERT INTO marslab_schema.visits (
+                id, renewal_id, cst_id, status, start_time, arrival_time, check_in_time,
+                check_out_time, start_latitude, start_longitude, client_reached,
+                arrival_latitude, arrival_longitude, arrival_distance_meters, notes,
+                photo_data, created_at, updated_at,
+                distance_km, signature_data, checklist_data, voice_note_data,
+                location_override, location_override_reason
+            ) VALUES (
+                NEW.id, target_renewal_id, target_cst_id, NEW.status, NEW.start_time, NEW.arrival_time, NEW.check_in_time,
+                NEW.check_out_time, NEW.start_latitude, NEW.start_longitude, NEW.client_reached,
+                NEW.arrival_latitude, NEW.arrival_longitude, NEW.arrival_distance_meters, NEW.notes,
+                NEW.photo_data, NEW.created_at, NEW.updated_at,
+                NEW.distance_km, NEW.signature_data, NEW.checklist_data, NEW.voice_note_data,
+                NEW.location_override, NEW.location_override_reason
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                renewal_id = EXCLUDED.renewal_id,
+                cst_id = EXCLUDED.cst_id,
+                status = EXCLUDED.status,
+                arrival_time = EXCLUDED.arrival_time,
+                check_in_time = EXCLUDED.check_in_time,
+                check_out_time = EXCLUDED.check_out_time,
+                client_reached = EXCLUDED.client_reached,
+                arrival_latitude = EXCLUDED.arrival_latitude,
+                arrival_longitude = EXCLUDED.arrival_longitude,
+                arrival_distance_meters = EXCLUDED.arrival_distance_meters,
+                notes = EXCLUDED.notes,
+                photo_data = EXCLUDED.photo_data,
+                distance_km = EXCLUDED.distance_km,
+                signature_data = EXCLUDED.signature_data,
+                checklist_data = EXCLUDED.checklist_data,
+                voice_note_data = EXCLUDED.voice_note_data,
+                location_override = EXCLUDED.location_override,
+                location_override_reason = EXCLUDED.location_override_reason,
+                updated_at = EXCLUDED.updated_at;
+
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION client_tracking_schema.sync_visit_delete_to_rms_trigger_fn()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            DELETE FROM marslab_schema.visits WHERE id = OLD.id;
+            RETURN OLD;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION client_tracking_schema.sync_location_to_rms_trigger_fn()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO marslab_schema.visit_locations (
+                id, visit_id, latitude, longitude, accuracy, captured_at
+            ) VALUES (
+                NEW.id, NEW.visit_id, NEW.latitude, NEW.longitude, NEW.accuracy, NEW.captured_at
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                visit_id = EXCLUDED.visit_id,
+                latitude = EXCLUDED.latitude,
+                longitude = EXCLUDED.longitude,
+                accuracy = EXCLUDED.accuracy,
+                captured_at = EXCLUDED.captured_at;
+
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        CREATE OR REPLACE FUNCTION client_tracking_schema.sync_location_delete_to_rms_trigger_fn()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            DELETE FROM marslab_schema.visit_locations WHERE id = OLD.id;
+            RETURN OLD;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        -- Bind triggers
+        DROP TRIGGER IF EXISTS trg_sync_visit_to_rms ON client_tracking_schema.visits;
+        CREATE TRIGGER trg_sync_visit_to_rms
+        AFTER INSERT OR UPDATE ON client_tracking_schema.visits
+        FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_visit_to_rms_trigger_fn();
+
+        DROP TRIGGER IF EXISTS trg_sync_visit_delete_to_rms ON client_tracking_schema.visits;
+        CREATE TRIGGER trg_sync_visit_delete_to_rms
+        AFTER DELETE ON client_tracking_schema.visits
+        FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_visit_delete_to_rms_trigger_fn();
+
+        DROP TRIGGER IF EXISTS trg_sync_location_to_rms ON client_tracking_schema.visit_locations;
+        CREATE TRIGGER trg_sync_location_to_rms
+        AFTER INSERT OR UPDATE ON client_tracking_schema.visit_locations
+        FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_location_to_rms_trigger_fn();
+
+        DROP TRIGGER IF EXISTS trg_sync_location_delete_to_rms ON client_tracking_schema.visit_locations;
+        CREATE TRIGGER trg_sync_location_delete_to_rms
+        AFTER DELETE ON client_tracking_schema.visit_locations
+        FOR EACH ROW EXECUTE FUNCTION client_tracking_schema.sync_location_delete_to_rms_trigger_fn();
+      `);
+      console.log('✅ CTS-to-RMS Database Triggers configured successfully');
+    }
   } catch (err) {
     console.error('Error initializing database:', err);
   }

@@ -48,10 +48,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5432:5432"
     restart: unless-stopped
-    # SECURITY: Do not expose the DB port to the host machine
-    # Only the app container communicates with it via the internal network
-    # ports:  <-- intentionally commented out
 
 volumes:
   postgres_data:

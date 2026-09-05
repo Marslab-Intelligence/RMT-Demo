@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { X, Lock, Save, Edit3, Calendar } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
+import GlassSelect from './GlassSelect';
+import GlassDatePicker from './GlassDatePicker';
 
 const PREDEFINED_SERVICES = [
   "AWS",
@@ -285,22 +287,17 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
               </div>
               <div>
                 <label className="label">Service Name <span className="text-red-500">*</span></label>
-                <select 
+                <GlassSelect 
                   required
                   value={selectedMainService} 
+                  placeholder="Select Service"
+                  options={[
+                    ...PREDEFINED_SERVICES.map(serviceName => ({ value: serviceName, label: serviceName })),
+                    ...(selectedMainService && !PREDEFINED_SERVICES.includes(selectedMainService) ? [{ value: selectedMainService, label: selectedMainService }] : [])
+                  ]}
                   onChange={handleMainServiceChange} 
-                  className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="">Select Service</option>
-                  {PREDEFINED_SERVICES.map(serviceName => (
-                    <option key={serviceName} value={serviceName} className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">
-                      {serviceName}
-                    </option>
-                  ))}
-                  {selectedMainService && !PREDEFINED_SERVICES.includes(selectedMainService) && (
-                    <option value={selectedMainService}>{selectedMainService}</option>
-                  )}
-                </select>
+                  className="w-full"
+                />
 
                 {SUB_SERVICES[selectedMainService] && (
                   <div className="mt-2.5 p-3 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 space-y-2">
@@ -341,30 +338,15 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
               
               <div>
                 <label className="label">Renewal Date {formData.status !== '-' && <span className="text-red-500">*</span>}</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    name="renewal_date" 
-                    placeholder="DD/MM/YYYY" 
-                    required={formData.status !== '-'} 
-                    value={formData.renewal_date} 
-                    onChange={handleDateChange} 
-                    className="input-field pr-10" 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => datePickerRef.current?.showPicker()}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 dark:hover:text-white"
-                  >
-                    <Calendar className="w-5 h-5" />
-                  </button>
-                  <input 
-                    type="date"
-                    ref={datePickerRef}
-                    onChange={handleNativeDateSelect}
-                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-                  />
-                </div>
+                <GlassDatePicker 
+                  name="renewal_date" 
+                  placeholder="DD/MM/YYYY" 
+                  required={formData.status !== '-'} 
+                  value={formData.renewal_date} 
+                  outputFormat="DD/MM/YYYY"
+                  onChange={(e, val) => setFormData({ ...formData, renewal_date: val !== undefined ? val : e.target.value })} 
+                  className="w-full" 
+                />
               </div>
               <div>
                 <label className="label">Contract Value (₹) {formData.status !== '-' && <span className="text-red-500">*</span>}</label>
@@ -402,22 +384,32 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
               </div>
               <div>
                 <label className="label">Initial Status</label>
-                <select name="status" value={formData.status} onChange={handleChange} className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">
-                  <option value="Active" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Active</option>
-                  <option value="Pending Renewal" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Pending Renewal</option>
-                  {formData.status === 'Expired' && (
-                    <option value="Expired" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Expired</option>
-                  )}
-                </select>
+                <GlassSelect 
+                  name="status" 
+                  value={formData.status} 
+                  onChange={handleChange} 
+                  options={[
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Pending Renewal', label: 'Pending Renewal' },
+                    ...(formData.status === 'Expired' ? [{ value: 'Expired', label: 'Expired' }] : []),
+                  ]}
+                  className="w-full"
+                />
               </div>
               <div>
                 <label className="label">Plan Period</label>
-                <select name="plan_period" value={formData.plan_period} onChange={handleChange} className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">
-                  <option value="monthly_plan" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Monthly plan</option>
-                  <option value="quarterly_plan" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Quarterly plan</option>
-                  <option value="halfly_plan" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Halfly plan</option>
-                  <option value="yearly_plan" className="bg-white dark:bg-surface-800 text-zinc-900 dark:text-white">Yearly plan</option>
-                </select>
+                <GlassSelect 
+                  name="plan_period" 
+                  value={formData.plan_period} 
+                  onChange={handleChange} 
+                  options={[
+                    { value: 'monthly_plan', label: 'Monthly plan' },
+                    { value: 'quarterly_plan', label: 'Quarterly plan' },
+                    { value: 'halfly_plan', label: 'Halfly plan' },
+                    { value: 'yearly_plan', label: 'Yearly plan' },
+                  ]}
+                  className="w-full"
+                />
               </div>
               {formData.plan_period === 'yearly_plan' && (
                 <div>
@@ -478,17 +470,19 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
 
               <div>
                 <label className="label">Entity</label>
-                <select
+                <GlassSelect
                   name="entity"
                   value={formData.entity}
+                  placeholder="Select entity..."
                   onChange={handleChange}
-                  className="input-field bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
-                >
-                  <option value="">Select entity...</option>
-                  <option value="MIPL">MIPL</option>
-                  <option value="SIDCORPTECH">SIDCORPTECH</option>
-                  <option value="SPIOT">SPIOT</option>
-                </select>
+                  options={[
+                    { value: '', label: 'Select entity...' },
+                    { value: 'MIPL', label: 'MIPL' },
+                    { value: 'SIDCORPTECH', label: 'SIDCORPTECH' },
+                    { value: 'SPIOT', label: 'SPIOT' },
+                  ]}
+                  className="w-full"
+                />
               </div>
 
               <div>
