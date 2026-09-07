@@ -2,40 +2,39 @@
 
 set -euo pipefail
 
-PEM_KEY="${PEM_KEY:-/home/sameer/Documents/pem Files/marslab-Devops.pem}"
-SERVER_USER="${SERVER_USER:-ubuntu}"
-AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
-AWS_PROFILE="${AWS_PROFILE:-marslab-AI}"
-export AWS_PROFILE
+# Ships the current source tree to the on-prem build host and runs push.sh
+# there (build image -> push to the internal registry -> helm upgrade).
+# Replaces the old EC2/pem-key/AWS-profile flow — SSH_KEY/SSH_HOST now point
+# at whatever on-prem box has docker + helm + a kubeconfig for the cluster,
+# not an AWS EC2 instance.
 
-# Dynamically resolve server IP via AWS CLI if not explicitly passed
-if [ -z "${SERVER_IP:-}" ]; then
-  SERVER_IP="3.110.160.60"
-fi
+SSH_KEY="${SSH_KEY:?SSH_KEY is required, e.g. /path/to/deploy_key}"
+SSH_USER="${SSH_USER:-deploy}"
+SSH_HOST="${SSH_HOST:?SSH_HOST is required, e.g. build.internal.marslab.local}"
+REMOTE_DIR="${REMOTE_DIR:-/home/$SSH_USER/deploy-rmt}"
 
-IMAGE_TAG="${IMAGE_TAG:-version9}"
-export IMAGE_TAG
+REGISTRY_URL="${REGISTRY_URL:?REGISTRY_URL is required}"
+IMAGE_TAG="${IMAGE_TAG:-v-$(date +%Y%m%d-%H%M%S)}"
 
 echo "=========================================="
-echo "🚀 Deploying Application to $SERVER_IP (Image Tag: $IMAGE_TAG)"
+echo "🚀 Deploying to $SSH_HOST (Image Tag: $IMAGE_TAG)"
 echo "=========================================="
 
 echo "📦 1. Creating source archive..."
-tar --exclude='node_modules' --exclude='.git' --exclude='dist' -czf /tmp/rmt_code.tar.gz -C /home/sameer/Documents/renewal-management-system .
+tar --exclude='node_modules' --exclude='.git' --exclude='dist' -czf /tmp/rmt_code.tar.gz -C "$(pwd)" .
 
-echo "📤 2. Uploading code to target EC2 instance ($SERVER_IP)..."
-scp -F /dev/null -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i "$PEM_KEY" /tmp/rmt_code.tar.gz "$SERVER_USER@$SERVER_IP:/home/ubuntu/"
+echo "📤 2. Uploading code to $SSH_HOST..."
+scp -F /dev/null -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i "$SSH_KEY" /tmp/rmt_code.tar.gz "$SSH_USER@$SSH_HOST:/home/$SSH_USER/"
 
-echo "⚙️ 3. Building ECR Docker image, updating remote YAML, and executing targeted rollout restart..."
-ssh -F /dev/null -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i "$PEM_KEY" "$SERVER_USER@$SERVER_IP" "
-  mkdir -p /home/ubuntu/deploy-rmt
-  tar -xzf /home/ubuntu/rmt_code.tar.gz -C /home/ubuntu/deploy-rmt
-  cd /home/ubuntu/deploy-rmt
+echo "⚙️ 3. Building image, pushing to registry, and rolling the Helm release..."
+ssh -F /dev/null -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i "$SSH_KEY" "$SSH_USER@$SSH_HOST" "
+  mkdir -p '$REMOTE_DIR'
+  tar -xzf /home/$SSH_USER/rmt_code.tar.gz -C '$REMOTE_DIR'
+  cd '$REMOTE_DIR'
   chmod +x push.sh
-  IMAGE_TAG='$IMAGE_TAG' ./push.sh
+  REGISTRY_URL='$REGISTRY_URL' REGISTRY_USER='${REGISTRY_USER:-}' REGISTRY_PASSWORD='${REGISTRY_PASSWORD:-}' IMAGE_TAG='$IMAGE_TAG' ./push.sh
 "
 
 echo "=========================================="
 echo "✅ Deployment completed successfully!"
-echo "🌐 Application Host: http://$SERVER_IP"
 echo "=========================================="

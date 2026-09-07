@@ -70,8 +70,8 @@ export default function Visits() {
     };
   }, []);
 
-  const isAdmin = user?.role === 'admin';
-  const isCST = user?.role === 'sales';
+  const isAdmin = (user?.role === 'super_admin' || user?.role === 'dept_admin');
+  const isCST = user?.role === 'user';
 
   return (
     <div className="space-y-6">

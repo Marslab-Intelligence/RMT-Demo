@@ -36,15 +36,15 @@ async function processRenewals() {
       return;
     }
 
-    // Fetch active users with admin or sales/cst roles
+    // Fetch active users with admin or user roles
     const { rows: activeUsers } = await db.query(`
-      SELECT email, role FROM users 
-      WHERE role IN ('sales', 'admin', 'cst') 
+      SELECT email, role FROM users
+      WHERE role IN ('super_admin', 'dept_admin', 'user')
         AND is_active = true
     `);
 
-    const adminEmailsList = activeUsers.filter(u => u.role === 'admin').map(u => u.email).filter(Boolean);
-    const salesEmailsList = activeUsers.filter(u => u.role === 'sales' || u.role === 'cst').map(u => u.email).filter(Boolean);
+    const adminEmailsList = activeUsers.filter(u => u.role === 'super_admin' || u.role === 'dept_admin').map(u => u.email).filter(Boolean);
+    const salesEmailsList = activeUsers.filter(u => u.role === 'user').map(u => u.email).filter(Boolean);
 
     const adminEmails = adminEmailsList.join(',') || 'renewals@sidcorptech.net';
     const salesEmails = salesEmailsList.join(',') || 'renewals@sidcorptech.net';

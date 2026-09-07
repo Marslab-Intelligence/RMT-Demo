@@ -4,12 +4,12 @@ import bcrypt from 'bcryptjs';
 import db, { initDb } from './db.js';
 
 const DEMO_USERS = [
-  { email: 'admin.demo@marslab.work', full_name: 'Aditi Sharma', role: 'admin', password: 'Demo@1234', avatar_color: '#f59e0b' },
-  { email: 'sales.demo1@marslab.work', full_name: 'Rohan Mehta', role: 'sales', password: 'Demo@1234', avatar_color: '#3b82f6' },
-  { email: 'sales.demo2@marslab.work', full_name: 'Priya Nair', role: 'sales', password: 'Demo@1234', avatar_color: '#10b981' },
-  { email: 'ranjithkumar.v@marslab.work', full_name: 'Ranjith Kumar', role: 'sales', password: 'sales123', avatar_color: '#8b5cf6' },
-  { email: 'sakthivel.k@marslab.work', full_name: 'Sakthivel K', role: 'sales', password: 'sales123', avatar_color: '#06b6d4' },
-  { email: 'sameerulrahman.f@marslab.work', full_name: 'Sameerul Rahman', role: 'admin', password: 'admin123', avatar_color: '#ec4899' },
+  { email: 'admin.demo@marslab.work', full_name: 'Aditi Sharma', role: 'dept_admin', password: 'Demo@1234', avatar_color: '#f59e0b' },
+  { email: 'sales.demo1@marslab.work', full_name: 'Rohan Mehta', role: 'user', password: 'Demo@1234', avatar_color: '#3b82f6' },
+  { email: 'sales.demo2@marslab.work', full_name: 'Priya Nair', role: 'user', password: 'Demo@1234', avatar_color: '#10b981' },
+  { email: 'ranjithkumar.v@marslab.work', full_name: 'Ranjith Kumar', role: 'user', password: 'sales123', avatar_color: '#8b5cf6' },
+  { email: 'sakthivel.k@marslab.work', full_name: 'Sakthivel K', role: 'user', password: 'sales123', avatar_color: '#06b6d4' },
+  { email: 'sameerulrahman.f@marslab.work', full_name: 'Sameerul Rahman', role: 'super_admin', password: 'admin123', avatar_color: '#ec4899' },
 ];
 
 const CITIES = [
@@ -295,24 +295,62 @@ function calculateEmailFlags(daysLeft) {
   };
 }
 
-async function seedUsers() {
+// RBAC v2: every demo renewal needs a department_id/category_id, and every
+// dept_admin/user demo account needs a matching department_id/category_id —
+// otherwise the new scoping in server/utils/scope.js hides all of this data
+// from everyone but super_admin. Reuses the Software department that
+// initDb() already seeds, and adds one category per SERVICE_CATALOG entry
+// (AWS/Microsoft already exist from that seed, ON CONFLICT DO NOTHING skips
+// re-creating them).
+async function ensureDemoDepartmentAndCategories() {
+  const { rows: [dept] } = await db.query("SELECT id FROM departments WHERE slug = 'software-renewals'");
+  const categoryIdsByService = {};
+  for (const cat of SERVICE_CATALOG) {
+    const slug = cat.service.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    await db.query(
+      `INSERT INTO categories (department_id, name, slug) VALUES ($1, $2, $3)
+       ON CONFLICT (department_id, slug) DO NOTHING`,
+      [dept.id, cat.service, slug]
+    );
+    const { rows: [row] } = await db.query(
+      'SELECT id FROM categories WHERE department_id = $1 AND slug = $2',
+      [dept.id, slug]
+    );
+    categoryIdsByService[cat.service] = row.id;
+  }
+  return { departmentId: dept.id, categoryIdsByService };
+}
+
+async function seedUsers(departmentId, categoryIdsByService) {
   const idsByEmail = {};
+  const userAccounts = DEMO_USERS.filter(u => u.role === 'user');
+  const serviceNames = Object.keys(categoryIdsByService);
+
   for (const u of DEMO_USERS) {
+    let deptId = null, catId = null;
+    if (u.role === 'dept_admin') {
+      deptId = departmentId;
+    } else if (u.role === 'user') {
+      deptId = departmentId;
+      const idx = userAccounts.indexOf(u);
+      catId = categoryIdsByService[serviceNames[idx % serviceNames.length]];
+    }
+
     const { rows } = await db.query('SELECT id FROM users WHERE email = $1', [u.email]);
     if (rows.length > 0) {
       idsByEmail[u.email] = rows[0].id;
       // Ensure active
-      await db.query('UPDATE users SET is_active = TRUE, full_name = $1, role = $2, avatar_color = $3 WHERE id = $4', [
-        u.full_name, u.role, u.avatar_color, rows[0].id
+      await db.query('UPDATE users SET is_active = TRUE, full_name = $1, role = $2, avatar_color = $3, department_id = $4, category_id = $5 WHERE id = $6', [
+        u.full_name, u.role, u.avatar_color, deptId, catId, rows[0].id
       ]);
       continue;
     }
     const hash = await bcrypt.hash(u.password, 10);
     const username = u.email.split('@')[0];
     const { rows: inserted } = await db.query(
-      `INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING id`,
-      [username, u.email, hash, u.full_name, u.role, u.avatar_color]
+      `INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active, department_id, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8) RETURNING id`,
+      [username, u.email, hash, u.full_name, u.role, u.avatar_color, deptId, catId]
     );
     idsByEmail[u.email] = inserted[0].id;
     console.log(`  + Seeded user ${u.full_name} <${u.email}> (${u.role})`);
@@ -320,7 +358,7 @@ async function seedUsers() {
   return idsByEmail;
 }
 
-async function seed1000Renewals(idsByEmail) {
+async function seed1000Renewals(idsByEmail, departmentId, categoryIdsByService) {
   console.log('Clearing old renewals and dependent records...');
   await db.query('DELETE FROM visits');
   await db.query('DELETE FROM visit_locations');
@@ -331,7 +369,7 @@ async function seed1000Renewals(idsByEmail) {
   await db.query('DELETE FROM renewals');
 
   console.log('Generating 1,000 realistic dummy renewals...');
-  const salesUsers = DEMO_USERS.filter(u => u.role === 'sales');
+  const salesUsers = DEMO_USERS.filter(u => u.role === 'user');
   const allUsers = DEMO_USERS;
 
   // Distribution plan:
@@ -481,12 +519,13 @@ async function seed1000Renewals(idsByEmail) {
         purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit,
         vendor, entity, created_by, is_deleted,
         payment_status, payment_amount, payment_received_date,
-        client_latitude, client_longitude, invoice_type, payment_state, quotation_number
+        client_latitude, client_longitude, invoice_type, payment_state, quotation_number,
+        department_id, category_id
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
         $25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,
-        $38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54
+        $38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56
       ) RETURNING id
     `;
 
@@ -546,7 +585,9 @@ async function seed1000Renewals(idsByEmail) {
       client_lng,
       'Invoice',
       item.paymentStatus === 'Yes' ? 'paid' : (item.invoiceStatus === 'Sent' ? 'pending' : 'unknown'),
-      quoteNum
+      quoteNum,
+      departmentId,
+      categoryIdsByService[cat.service],
     ];
 
     const { rows } = await db.query(query, values);
@@ -703,8 +744,9 @@ async function main() {
   }
   await initDb();
   console.log('=== SEEDING 1,000 DUMMY RECORDS FOR CLIENT DEMO ===');
-  const idsByEmail = await seedUsers();
-  const renewalIds = await seed1000Renewals(idsByEmail);
+  const { departmentId, categoryIdsByService } = await ensureDemoDepartmentAndCategories();
+  const idsByEmail = await seedUsers(departmentId, categoryIdsByService);
+  const renewalIds = await seed1000Renewals(idsByEmail, departmentId, categoryIdsByService);
   await seedComplementaryData(renewalIds, idsByEmail);
 
   // Summary counts

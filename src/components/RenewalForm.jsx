@@ -28,7 +28,7 @@ const SUB_SERVICES = {};
 
 export default function RenewalForm({ onClose, onSuccess, editData = null }) {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = (user?.role === 'super_admin' || user?.role === 'dept_admin');
   const [loading, setLoading] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const datePickerRef = useRef(null);

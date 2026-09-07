@@ -12,8 +12,8 @@ MarsLab is a **reseller**: they buy licences from vendors (Google Workspace, Mic
 
 **The core problem it solves:** contract renewals expire silently and revenue leaks. RMT tracks every contract's expiry date, automatically emails clients on a fixed reminder ladder, forces the sales team to record *why* a renewal lapsed, and reports on the revenue and margin at stake.
 
-**Live URL:** `https://rmt.marslabintel.com`
-**Availability:** the EC2 instance runs on a schedule — the app is only reachable **09:00–21:00 IST** to save cost.
+**Live URL:** on-prem hostname (see `charts/rmt/values.yaml` `hostname`)
+**Availability:** runs continuously (24/7) on owned on-prem hardware — the old EC2 09:00–21:00 IST power schedule was an AWS-compute-cost workaround that no longer applies now that the org owns the hardware outright.
 
 ---
 
@@ -49,8 +49,8 @@ The DB `CHECK` constraint allows only `('sales','admin')`. Note two inconsistenc
 
 **Infrastructure**
 - Docker multi-stage build (node:20-alpine), runs as non-root `USER node`, exposes **3001**
-- AWS ECR → EC2 → Kubernetes (`kubectl rollout restart deployment/app`)
-- Deploy via `./push.sh` (builds, pushes to ECR, SSHes to EC2, patches the manifest, rolls the deployment)
+- On-prem k3s cluster, deployed via the Helm chart in `charts/rmt/` (Postgres StatefulSet, MinIO object storage, Ingress/TLS via ingress-nginx + cert-manager, nightly pg_dump backup CronJob — see `charts/rmt/README.md`). Migrated off AWS ECR/EC2 — no AWS dependency remains.
+- Deploy via `./push.sh` (builds, pushes to the on-prem registry, `helm upgrade --install`)
 
 ---
 
@@ -193,7 +193,7 @@ npm run build     # vite build → dist/
 npm start         # NODE_ENV=production node server/index.js  (serves dist/ + /api)
 npm run dev       # build then start (NOT a hot-reload dev server)
 npm run seed      # node server/seed.js
-./push.sh         # full deploy: docker build → ECR → EC2 → kubectl rollout
+./push.sh         # full deploy: docker build → on-prem registry → helm upgrade --install
 ```
 
 There is **no HMR dev server script** — `npm run dev` does a full build then starts the production server.

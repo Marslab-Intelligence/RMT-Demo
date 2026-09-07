@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rmt.fullname" . }}
+  labels:
+    {{- include "rmt.labels" . | nindent 4 }}
+spec:
+  # See values.yaml app.replicas comment — pinned to 1 by design until the
+  # scheduler is moved behind a CronJob-triggered endpoint.
+  replicas: {{ .Values.app.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rmt
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rmt
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecretName }}
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "rmt.fullname" . }}-postgres 5432; do
+                echo "Waiting for postgres...";
+                sleep 2;
+              done;
+              echo "Postgres is ready!"
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.port }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "rmt.fullname" . }}-app-config
+            - secretRef:
+                name: {{ include "rmt.fullname" . }}-app-secret
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.app.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rmt.fullname" . }}
+  labels:
+    {{- include "rmt.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: rmt
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: 80
+      targetPort: {{ .Values.app.port }}

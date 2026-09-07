@@ -32,18 +32,20 @@ import {
   Users,
   Mail,
   Pin,
-  Tag
+  Tag,
+  Plus
 } from 'lucide-react';
 
 const getRoleLabel = (role) => {
-  if (role === 'admin') return 'Admin';
-  if (role === 'sales') return 'CST / Sales';
+  if (role === 'super_admin') return 'Super Admin';
+  if (role === 'dept_admin') return 'Dept Admin';
+  if (role === 'user') return 'User';
   return '';
 };
 
 const getRoleBadgeStyle = (role) => {
-  if (role === 'admin') return 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800/50';
-  if (role === 'sales') return 'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/50';
+  if (role === 'super_admin' || role === 'dept_admin') return 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800/50';
+  if (role === 'user') return 'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/50';
   return '';
 };
 
@@ -65,6 +67,13 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const profileDropdownRef = useRef(null);
+  const [headerSearch, setHeaderSearch] = useState('');
+
+  const handleHeaderSearch = (e) => {
+    e.preventDefault();
+    const q = headerSearch.trim();
+    navigate(q ? `/renewals?search=${encodeURIComponent(q)}` : '/renewals');
+  };
 
   const [expiredNoReason, setExpiredNoReason] = useState([]);
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
@@ -128,7 +137,7 @@ export default function Layout({ children }) {
   };
 
   const fetchExpiredNoReason = useCallback(async () => {
-    if (!token || user?.role !== 'sales') return;
+    if (!token || user?.role !== 'user') return;
     // If snoozed, don't auto-open but still fetch
     try {
       const res = await fetch('/api/renewals/expired-no-reason', {
@@ -276,7 +285,7 @@ export default function Layout({ children }) {
         setUnreadCount(data.unread);
 
         // If the user is admin or sales, show toast popups for new unread notifications
-        if (user?.role === 'admin' || user?.role === 'sales') {
+        if ((user?.role === 'super_admin' || user?.role === 'dept_admin') || user?.role === 'user') {
           data.notifications.forEach(notif => {
             if (notif.read === 0 && !toastedIdsRef.current.has(notif.id)) {
               // If it's not the first load, trigger the toast popup!
@@ -549,12 +558,12 @@ export default function Layout({ children }) {
     {
       label: 'Analytics',
       items: [
-        { name: user?.role === 'admin' ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
+        { name: (user?.role === 'super_admin' || user?.role === 'dept_admin') ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
         { name: 'Record Details', path: '/edits-history', icon: History },
         { name: 'Visit Tracking', path: '/visits', icon: MapPin },
       ],
     },
-    ...(user?.role === 'admin' ? [{
+    ...((user?.role === 'super_admin' || user?.role === 'dept_admin') ? [{
       label: 'Administration',
       items: [
         { name: 'Guardian Health', path: '/agent-health', icon: ShieldAlert },
@@ -643,21 +652,19 @@ export default function Layout({ children }) {
         }}
       >
         {/* ── Sidebar Header / Logo ── */}
-        <div className="flex items-center justify-between h-16 px-5 flex-shrink-0"
+        <div className="flex items-center justify-between h-14 px-4 flex-shrink-0"
           style={{
             borderBottom: '1px solid var(--sidebar-border)',
           }}
         >
-          <div 
-            onClick={() => navigate('/')} 
+          <div
+            onClick={() => navigate('/')}
             className="flex items-center gap-2.5 cursor-pointer group select-none"
-            title="MarsLab Dashboard"
+            title="RMT Dashboard"
           >
-            <img 
-              src="/logo.png" 
-              alt="MarsLab Logo" 
-              className="h-7 w-auto object-contain dark:invert dark:hue-rotate-180 transition-transform duration-300 group-hover:scale-105" 
-            />
+            <span className="text-lg font-bold tracking-tight text-gray-900 dark:text-white transition-transform duration-300 group-hover:scale-105">
+              RMT
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -667,7 +674,7 @@ export default function Layout({ children }) {
                 localStorage.setItem('sidebar_pinned', String(newVal));
               }}
               title={isSidebarPinned ? 'Unpin Sidebar' : 'Pin Sidebar'}
-              className={`hidden lg:flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-250 border cursor-pointer ${
+              className={`hidden lg:flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-250 border cursor-pointer ${
                 isSidebarPinned
                   ? 'sidebar-pin-active'
                   : 'sidebar-pin-inactive'
@@ -687,12 +694,12 @@ export default function Layout({ children }) {
         </div>
 
         {/* ── Navigation ── */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 sidebar-scroll">
+        <div className="flex-1 overflow-y-auto px-2.5 py-1.5 sidebar-scroll">
           {navSections.map((section, sIdx) => (
-            <div key={sIdx} className={sIdx > 0 ? 'mt-5' : ''}>
+            <div key={sIdx} className={sIdx > 0 ? 'mt-2.5' : ''}>
               {section.label && (
-                <div className="px-3 mb-2 flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400/80 dark:text-gray-500">
+                <div className="px-2 mb-1 flex items-center gap-2">
+                  <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-stone-400/80 dark:text-gray-500">
                     {section.label}
                   </span>
                   <div className="flex-1 h-px bg-gradient-to-r from-stone-300/40 to-transparent dark:from-white/10 dark:to-transparent" />
@@ -714,12 +721,12 @@ export default function Layout({ children }) {
                         <>
                           {/* Active accent bar */}
                           <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300 ${
-                            isActive ? 'h-5 bg-brand-500 dark:bg-brand-400 shadow-[0_0_8px_rgba(var(--brand-rgb),0.4)]' : 'h-0 bg-transparent'
+                            isActive ? 'h-4 bg-brand-500 dark:bg-brand-400 shadow-[0_0_8px_rgba(var(--brand-rgb),0.4)]' : 'h-0 bg-transparent'
                           }`} />
                           <div className={`sidebar-nav-icon ${isActive ? 'sidebar-nav-icon-active' : ''}`}>
-                            <Icon className="w-[18px] h-[18px]" />
+                            <Icon className="w-4 h-4" />
                           </div>
-                          <span className={`text-[13px] font-medium transition-colors duration-200 ${
+                          <span className={`text-[12.5px] font-medium transition-colors duration-200 ${
                             isActive ? 'text-gray-900 dark:text-white' : 'text-stone-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
                           }`}>
                             {item.name}
@@ -754,7 +761,10 @@ export default function Layout({ children }) {
       >
         {/* Top Header */}
         <header
-          className="h-14 flex items-center justify-between px-5 z-20 sticky top-0 backdrop-blur-xl bg-[#f8f0e6]/60 dark:bg-[#14101e]/60 border-b border-stone-300/30 dark:border-white/10 transition-colors duration-300"
+          className="h-14 flex items-center justify-between px-5 z-20 sticky top-0 backdrop-blur-xl bg-[#f8f0e6]/60 dark:bg-[#14101e]/60 transition-colors duration-300"
+          style={{
+            borderBottom: '1px solid var(--sidebar-border)',
+          }}
         >
           {/* ── LEFT: Home + Role Badge ── */}
           <div className="flex items-center gap-2.5">
@@ -764,13 +774,13 @@ export default function Layout({ children }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <img 
-              src="/logo.png" 
-              alt="MarsLab Logo" 
-              className={`h-7 w-auto cursor-pointer object-contain dark:invert dark:hue-rotate-180 mr-1 ${(isSidebarPinned || isHoveredSidebar) ? 'lg:hidden' : ''}`} 
-              onClick={() => navigate('/')} 
+            <span
+              className={`text-base font-bold tracking-tight text-gray-900 dark:text-white cursor-pointer mr-1 ${(isSidebarPinned || isHoveredSidebar) ? 'lg:hidden' : ''}`}
+              onClick={() => navigate('/')}
               title="Go to Dashboard"
-            />
+            >
+              RMT
+            </span>
             <button
               onClick={() => navigate('/')}
               title="Go to Dashboard"
@@ -781,8 +791,46 @@ export default function Layout({ children }) {
             </button>
           </div>
 
-          {/* ── RIGHT: Role Badge + Theme + Bell + Profile ── */}
+          {/* ── CENTER: Global Search (hidden on the Dashboard — it has its own controls) ── */}
+          {location.pathname !== '/' && (
+            <div className="hidden md:flex flex-1 justify-center px-4">
+              <form onSubmit={handleHeaderSearch} className="relative w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400 dark:text-gray-500 pointer-events-none" />
+                <input
+                  type="text"
+                  value={headerSearch}
+                  onChange={(e) => setHeaderSearch(e.target.value)}
+                  placeholder="Search renewals and clients"
+                  className="input-field w-full h-9 pl-9 pr-3 text-xs"
+                />
+              </form>
+            </div>
+          )}
+
+          {/* ── RIGHT: Create + Role Badge + Theme + Bell + Profile ── */}
           <div className="flex items-center gap-2.5">
+
+            {/* Quick Create (hidden on the Dashboard — it has its own Create Renewal button) */}
+            {location.pathname !== '/' && ((user?.role === 'super_admin' || user?.role === 'dept_admin') || user?.role === 'user') && (
+              <button
+                onClick={() => navigate('/renewals?create=1')}
+                className="btn-primary hidden sm:flex items-center gap-1.5 h-9 px-3 text-xs whitespace-nowrap"
+                title="Create a new renewal"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create</span>
+              </button>
+            )}
+
+            {/* Scope Indicator — what this account is actually scoped to */}
+            {(user?.departmentName || user?.categoryName) && (
+              <span
+                className="hidden md:inline-flex items-center h-8 px-2.5 rounded-xl text-[11px] font-semibold tracking-wide bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] text-slate-600 dark:text-slate-300 whitespace-nowrap"
+                title="Your account's visibility scope"
+              >
+                Viewing: {user?.departmentName || 'All Departments'}{user?.categoryName ? ` → ${user.categoryName}` : ''}
+              </span>
+            )}
 
             {/* Role Badge */}
             <span className={`hidden sm:inline-flex items-center h-8 px-2.5 rounded-xl text-[11px] font-semibold tracking-wide ${getRoleBadgeStyle(user?.role)}`}>
@@ -881,7 +929,7 @@ export default function Layout({ children }) {
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 text-white"
                   style={{
-                    background: user?.role === 'admin'
+                    background: (user?.role === 'super_admin' || user?.role === 'dept_admin')
                       ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
                       : 'linear-gradient(135deg,#10b981,#047857)',
                   }}
@@ -911,7 +959,7 @@ export default function Layout({ children }) {
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 text-white"
                       style={{
-                        background: user?.role === 'admin'
+                        background: (user?.role === 'super_admin' || user?.role === 'dept_admin')
                           ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
                           : 'linear-gradient(135deg,#10b981,#047857)',
                       }}
@@ -930,7 +978,7 @@ export default function Layout({ children }) {
                       </span>
                     </div>
                   </div>
-                  {user?.role === 'admin' && (
+                  {(user?.role === 'super_admin' || user?.role === 'dept_admin') && (
                     <div className="px-3 py-2.5 flex flex-col gap-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                       <div className="flex items-center justify-between px-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -983,8 +1031,13 @@ export default function Layout({ children }) {
         </main>
       </div>
 
+      {/* ── Watermark credit (fixed, every page) ── */}
+      <div className="fixed bottom-2 left-2 z-10 pointer-events-none select-none text-[11px] text-stone-400/70 dark:text-stone-500/50 tracking-wide">
+        Built by @marslab
+      </div>
+
       {/* ── Floating Expiry Reason Widget (Sales/CST only) ── */}
-      {user?.role === 'sales' && expiredNoReason.length > 0 && createPortal(
+      {user?.role === 'user' && expiredNoReason.length > 0 && createPortal(
         <div
           id="expiry-widget"
           style={{

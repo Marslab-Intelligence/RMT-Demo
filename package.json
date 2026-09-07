@@ -13,6 +13,10 @@
     "seed": "node server/seed.js",
     "seed:demo": "node server/seed1000Dummy.js",
     "seed:1000": "node server/seed1000Dummy.js",
+    "seed:30": "node server/seed30Dummy.js",
+    "db:clear": "node clear-records.js",
+    "db:keep100": "node keep100Records.js",
+    "migrate:photos": "node server/migratePhotosToObjectStorage.js",
     "verify:gemini": "node server/agent/verifyGeminiKey.js",
     "test": "node --test test/**/*.test.js"
   },
@@ -37,6 +41,7 @@
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.424.0",
+    "minio": "^8.0.7",
     "node-cron": "^4.5.0",
     "nodemailer": "^9.0.1",
     "pg": "^8.21.0",

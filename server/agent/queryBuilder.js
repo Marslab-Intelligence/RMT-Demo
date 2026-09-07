@@ -1,9 +1,20 @@
 import db from '../db.js';
+import { buildScopeClause } from '../utils/scope.js';
 
 /**
  * Allow-listed parameterized SQL query builder for AI agent
- * Enforces user role scoping for sales team members (owner/sales_email filter)
+ * Enforces the same RBAC v2 scoping as the REST routes: super_admin
+ * unrestricted, dept_admin scoped to department_id, user scoped to
+ * category_id AND owner/sales_email. Appends the clause at the caller's
+ * current queryParams length so param indexing stays correct regardless of
+ * how many params a given query already pushed.
  */
+function appendAgentScope(sql, queryParams, user) {
+  const scope = buildScopeClause(user, queryParams.length + 1);
+  queryParams.push(...scope.params);
+  return sql + scope.clause;
+}
+
 export async function executeAgentQuery({ queryName, params = [], user }) {
   let sql = '';
   const queryParams = [];
@@ -20,10 +31,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
           AND (renewal_date - CURRENT_DATE) <= $1
       `;
       queryParams.push(days);
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($2) OR LOWER(sales_email) = LOWER($3))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY renewal_date ASC LIMIT 50`;
       break;
     }
@@ -56,10 +64,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
       // optional LEADING zeros are allowed before the exact digits typed, so
       // "25" matches "RMT-0025" but not "RMT-0425" or "RMT-1025".
       queryParams.push(rawId, formattedRmt, `^rmt-0*${safeNumeric}$`);
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($4) OR LOWER(sales_email) = LOWER($5))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       break;
     }
 
@@ -75,10 +80,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       break;
     }
 
@@ -92,10 +94,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       break;
     }
 
@@ -106,10 +105,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY value DESC NULLS LAST LIMIT ${limit}`;
       break;
     }
@@ -121,10 +117,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY profit DESC NULLS LAST LIMIT ${limit}`;
       break;
     }
@@ -136,10 +129,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         WHERE is_deleted = FALSE 
           AND (payment_state = 'overdue' OR LOWER(status) = 'overdue' OR LOWER(payment_status) LIKE '%overdue%')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY value DESC NULLS LAST LIMIT 25`;
       break;
     }
@@ -150,10 +140,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND (invoice_status = 'Not' OR invoice_status IS NULL OR LOWER(invoice_status) = 'pending')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY value DESC NULLS LAST LIMIT 25`;
       break;
     }
@@ -173,10 +160,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         )
       `;
       queryParams.push(searchTerm);
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($2) OR LOWER(sales_email) = LOWER($3))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` ORDER BY renewal_date DESC LIMIT 25`;
       break;
     }
@@ -191,10 +175,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` GROUP BY service ORDER BY total_value DESC`;
       break;
     }
@@ -208,10 +189,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` GROUP BY vendor ORDER BY total_value DESC`;
       break;
     }
@@ -225,10 +203,7 @@ export async function executeAgentQuery({ queryName, params = [], user }) {
         FROM renewals
         WHERE is_deleted = FALSE AND status IN ('Active', 'Pending Renewal')
       `;
-      if (user?.role === 'sales') {
-        sql += ` AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))`;
-        queryParams.push(user.full_name || '', user.email || '');
-      }
+      sql = appendAgentScope(sql, queryParams, user);
       sql += ` GROUP BY owner ORDER BY total_value DESC`;
       break;
     }

@@ -2,6 +2,20 @@ import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { broadcastEvent } from '../services/realtime.js';
+import { isAdminLike } from '../utils/scope.js';
+import { uploadVisitPhoto, getVisitPhotoUrl } from '../services/objectStorage.js';
+
+// If object storage is configured, uploads the incoming base64 photo and
+// returns the object key to persist instead — otherwise returns the base64
+// value unchanged (legacy path, pre-migration or MinIO not configured).
+async function resolvePhotoForStorage(visitId, photoData) {
+  if (!photoData) return photoData;
+  const key = await uploadVisitPhoto(visitId, photoData).catch((err) => {
+    console.error('Visit photo upload to object storage failed, falling back to inline storage:', err.message);
+    return null;
+  });
+  return key || photoData;
+}
 
 const router = Router();
 
@@ -15,7 +29,7 @@ const forbidFinance = (req, res, next) => {
 
 // Middleware to restrict access to Admin only
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (!isAdminLike(req.user.role)) {
     return res.status(403).json({ error: 'Access Denied: Admin privileges required.' });
   }
   next();
@@ -51,7 +65,7 @@ router.get('/active', authenticateToken, forbidFinance, async (req, res) => {
     const params = [];
 
     // CST users only see their own active visits
-    if (req.user.role === 'sales') {
+    if (req.user.role === 'user') {
       query += ` AND v.cst_id = $1`;
       params.push(req.user.id);
     }
@@ -148,7 +162,7 @@ router.post('/:id/location', authenticateToken, forbidFinance, async (req, res) 
       return res.status(404).json({ error: 'Visit record not found' });
     }
 
-    if (req.user.role === 'sales' && visitRows[0].cst_id !== req.user.id) {
+    if (req.user.role === 'user' && visitRows[0].cst_id !== req.user.id) {
       return res.status(403).json({ error: 'Access Denied: You cannot update locations for another executive.' });
     }
 
@@ -205,13 +219,14 @@ router.post('/:id/check-in', authenticateToken, forbidFinance, async (req, res) 
 
     const visit = visitRows[0];
 
-    if (req.user.role === 'sales' && visit.cst_id !== req.user.id) {
+    if (req.user.role === 'user' && visit.cst_id !== req.user.id) {
       return res.status(403).json({ error: 'Access Denied: You cannot check-in for another executive.' });
     }
 
     // Proximity check is removed per user request (they do not have pre-set client coordinates)
     const clientReached = true;
     const distanceMeters = null;
+    const storedPhotoData = await resolvePhotoForStorage(visitId, photo_data);
 
     await db.query(
       `UPDATE visits
@@ -226,7 +241,7 @@ router.post('/:id/check-in', authenticateToken, forbidFinance, async (req, res) 
            photo_data = $6,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $7`,
-      [clientReached, latitude, longitude, distanceMeters, notes || '', photo_data || null, visitId]
+      [clientReached, latitude, longitude, distanceMeters, notes || '', storedPhotoData || null, visitId]
     );
 
     // Log activity
@@ -278,17 +293,18 @@ router.post('/:id/notes', authenticateToken, forbidFinance, async (req, res) => 
 
     const visit = visitRows[0];
 
-    if (req.user.role === 'sales' && visit.cst_id !== req.user.id) {
+    if (req.user.role === 'user' && visit.cst_id !== req.user.id) {
       return res.status(403).json({ error: 'Access Denied: You cannot update notes for another executive.' });
     }
 
+    const storedPhotoData = photo_data !== undefined ? await resolvePhotoForStorage(visitId, photo_data) : null;
     await db.query(
       `UPDATE visits
        SET notes = $1,
            photo_data = COALESCE($2, photo_data),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
-      [notes !== undefined ? notes : '', photo_data !== undefined ? photo_data : null, visitId]
+      [notes !== undefined ? notes : '', storedPhotoData, visitId]
     );
 
     // Broadcast SSE update event
@@ -327,11 +343,12 @@ router.post('/:id/check-out', authenticateToken, forbidFinance, async (req, res)
 
     const visit = visitRows[0];
 
-    if (req.user.role === 'sales' && visit.cst_id !== req.user.id) {
+    if (req.user.role === 'user' && visit.cst_id !== req.user.id) {
       return res.status(403).json({ error: 'Access Denied: You cannot check-out for another executive.' });
     }
 
     const { notes, photo_data } = req.body;
+    const storedPhotoData = photo_data !== undefined ? await resolvePhotoForStorage(visitId, photo_data) : null;
 
     await db.query(
       `UPDATE visits
@@ -341,7 +358,7 @@ router.post('/:id/check-out', authenticateToken, forbidFinance, async (req, res)
            photo_data = COALESCE($2::text, photo_data),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
-      [notes !== undefined ? notes : null, photo_data !== undefined ? photo_data : null, visitId]
+      [notes !== undefined ? notes : null, storedPhotoData, visitId]
     );
 
     // Log activity
@@ -375,8 +392,19 @@ router.post('/:id/check-out', authenticateToken, forbidFinance, async (req, res)
 // GET /api/visits/admin/active - Fetch list of active/ongoing visits (Admin)
 router.get('/admin/active', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    // PERF: was `v.*`, which includes visits.photo_data (base64 image TEXT,
+    // can be multi-MB per row). This list can return every org-wide
+    // active/checked-in visit at once with no cap — dragging every one of
+    // their photos over the wire on every poll of this endpoint, even though
+    // the admin overview only ever renders name/status/location. The single-
+    // visit detail route below (GET /admin/history/:id) still returns the
+    // photo, where it's actually needed.
     const { rows } = await db.query(`
-      SELECT v.*, r.client_name, r.service, r.client_latitude, r.client_longitude,
+      SELECT v.id, v.renewal_id, v.cst_id, v.status, v.start_time, v.arrival_time,
+             v.check_in_time, v.check_out_time, v.start_latitude, v.start_longitude,
+             v.client_reached, v.arrival_latitude, v.arrival_longitude,
+             v.arrival_distance_meters, v.notes, v.created_at, v.updated_at,
+             r.client_name, r.service, r.client_latitude, r.client_longitude,
              u.full_name as cst_name, u.email as cst_email,
              (SELECT JSON_BUILD_OBJECT('latitude', l.latitude, 'longitude', l.longitude, 'captured_at', l.captured_at) 
               FROM visit_locations l 
@@ -400,8 +428,15 @@ router.get('/admin/history', authenticateToken, requireAdmin, async (req, res) =
   const { cst_id, renewal_id, start_date, end_date, client_reached, status } = req.query;
 
   try {
+    // PERF: same issue as GET /admin/active — this is a filtered history
+    // table view (up to 100 rows/page); `v.*` meant up to 100 base64 photos
+    // in a single response for a page that only renders a summary table.
     let query = `
-      SELECT v.*, r.client_name, r.service, r.client_latitude, r.client_longitude,
+      SELECT v.id, v.renewal_id, v.cst_id, v.status, v.start_time, v.arrival_time,
+             v.check_in_time, v.check_out_time, v.start_latitude, v.start_longitude,
+             v.client_reached, v.arrival_latitude, v.arrival_longitude,
+             v.arrival_distance_meters, v.notes, v.created_at, v.updated_at,
+             r.client_name, r.service, r.client_latitude, r.client_longitude,
              u.full_name as cst_name, u.email as cst_email
       FROM visits v
       JOIN renewals r ON v.renewal_id = r.id
@@ -480,8 +515,18 @@ router.get('/admin/history/:id', authenticateToken, requireAdmin, async (req, re
       ORDER BY captured_at ASC
     `, [visitId]);
 
+    const visit = visitRows[0];
+    // photo_data may be an object-storage key (post-migration) rather than
+    // inline base64 — resolve it to a short-lived URL for the client. Falls
+    // through unchanged if object storage isn't configured or the value is
+    // still a legacy inline base64 string.
+    const photoUrl = await getVisitPhotoUrl(visit.photo_data).catch(() => null);
+    if (photoUrl) {
+      visit.photo_data = photoUrl;
+    }
+
     res.json({
-      visit: visitRows[0],
+      visit,
       route: locationRows
     });
   } catch (err) {
@@ -513,7 +558,7 @@ router.get('/admin/metrics', authenticateToken, requireAdmin, async (req, res) =
         ROUND((COUNT(v.id) FILTER (WHERE v.status = 'completed' AND v.client_reached = true)::decimal / NULLIF(COUNT(v.id) FILTER (WHERE v.status = 'completed'), 0)) * 100, 2) as success_rate
       FROM users u
       LEFT JOIN visits v ON v.cst_id = u.id
-      WHERE u.role = 'sales'
+      WHERE u.role = 'user'
       GROUP BY u.id, u.full_name
       ORDER BY success_rate DESC NULLS LAST
     `;

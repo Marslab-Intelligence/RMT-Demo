@@ -37,6 +37,32 @@ export const initDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- RBAC v2: department/category hierarchy. Departments/categories are
+      -- ordinary user-manageable rows (created via the UI at runtime by
+      -- super_admin/dept_admin respectively), not a fixed enum — every
+      -- permission check below reads these tables, never a hardcoded list.
+      CREATE TABLE IF NOT EXISTS departments (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(100) UNIQUE NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Labeled "services" in the API/UI to match business terminology;
+      -- "categories" is the internal/DB name.
+      CREATE TABLE IF NOT EXISTS categories (
+        id SERIAL PRIMARY KEY,
+        department_id INTEGER NOT NULL REFERENCES departments(id),
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(100) NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(department_id, slug)
+      );
+
       CREATE TABLE IF NOT EXISTS renewals (
         id SERIAL PRIMARY KEY,
         unique_id VARCHAR(255) UNIQUE NOT NULL,
@@ -360,6 +386,25 @@ export const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_visits_cst_status ON visits(cst_id, status);
       CREATE INDEX IF NOT EXISTS idx_visits_renewal ON visits(renewal_id);
       CREATE INDEX IF NOT EXISTS idx_visit_locations_visit ON visit_locations(visit_id, captured_at DESC);
+
+      -- PERF: renewals had zero indexes beyond the implicit primary key and
+      -- the unique_id UNIQUE constraint, despite being the largest, most
+      -- heavily-queried table in the app — every list/dashboard/agent query
+      -- filtering on these columns was a full sequential scan. Cheap at the
+      -- current demo-data row count (invisible), but sequential-scan cost
+      -- grows linearly with table size and these are the exact columns hit
+      -- on nearly every request (is_deleted+status: the list/dashboard/agent
+      -- filter on almost every query; renewal_date: sort key + expiring-soon
+      -- range filter; owner/sales_email: the 'sales' role row-scoping now
+      -- applied on ~15 renewals.js routes, always via LOWER(...) comparisons,
+      -- hence the functional indexes rather than plain ones; renewal_confirmation:
+      -- the scheduler's bulk transition WHERE clause, run every 15 min against
+      -- the whole table; vendor: the agent's vendor-breakdown tool).
+      CREATE INDEX IF NOT EXISTS idx_renewals_active_lookup ON renewals(is_deleted, status, renewal_date);
+      CREATE INDEX IF NOT EXISTS idx_renewals_renewal_confirmation ON renewals(renewal_confirmation);
+      CREATE INDEX IF NOT EXISTS idx_renewals_owner_lower ON renewals(LOWER(owner));
+      CREATE INDEX IF NOT EXISTS idx_renewals_sales_email_lower ON renewals(LOWER(sales_email));
+      CREATE INDEX IF NOT EXISTS idx_renewals_vendor ON renewals(vendor);
     `);
 
     // Update existing renewals with dummy coordinates if not set (around Chennai/Bangalore)
@@ -401,13 +446,129 @@ export const initDb = async () => {
     await pool.query(`
       UPDATE users SET role = 'sales' WHERE role = 'finance';
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('sales', 'admin'));
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user'));
 
       UPDATE email_logs SET recipient_type = 'sales' WHERE recipient_type = 'finance';
       ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_recipient_type_check;
       ALTER TABLE email_logs ADD CONSTRAINT email_logs_recipient_type_check CHECK(recipient_type IN ('client', 'sales', 'admin'));
 
       UPDATE notifications SET role = 'sales' WHERE role = 'finance';
+    `);
+
+    // ============================================================
+    // RBAC v2: super_admin / dept_admin / user, scoped by department/category.
+    // Additive + staged, matching this file's existing convention (no
+    // migration framework — initDb() IS the migration runner, idempotent on
+    // every boot). Order matters: columns before data, data before the
+    // constraint tightening (the constraint would reject old role values
+    // otherwise).
+    //
+    // Rollback, if ever needed: this is intentionally NOT automated (no
+    // down-migration tooling exists elsewhere in this file either) — the
+    // two commands to reverse the constraint step are:
+    //   ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    //   ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('sales','admin'));
+    // then re-run: UPDATE users SET role='admin' WHERE role IN ('super_admin','dept_admin');
+    //              UPDATE users SET role='sales' WHERE role='user';
+    // ============================================================
+
+    // Widen the constraint to accept BOTH old and new role values before any
+    // data migrates — the role UPDATEs below flip rows straight from
+    // 'admin'/'sales' to 'super_admin'/'dept_admin'/'user', and Postgres
+    // validates every row against a CHECK the instant it's added, so the
+    // still-old-only constraint from the block above would reject them.
+    // Tightened to new-values-only at the very end, once every row holds a
+    // valid new-model role.
+    await pool.query(`
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user'));
+    `);
+
+    await pool.query(`
+      ALTER TABLE renewals ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(id);
+      ALTER TABLE renewals ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES categories(id);
+      ALTER TABLE trash_renewals ADD COLUMN IF NOT EXISTS department_id INTEGER;
+      ALTER TABLE trash_renewals ADD COLUMN IF NOT EXISTS category_id INTEGER;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(id);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES categories(id);
+
+      CREATE INDEX IF NOT EXISTS idx_renewals_department ON renewals(department_id);
+      CREATE INDEX IF NOT EXISTS idx_renewals_category ON renewals(category_id);
+      CREATE INDEX IF NOT EXISTS idx_users_department ON users(department_id);
+      CREATE INDEX IF NOT EXISTS idx_users_category ON users(category_id);
+    `);
+
+    // Seed the two starting departments and their starting categories.
+    // Idempotent via slug uniqueness — safe to run every boot. created_by is
+    // NULL for these (system-seeded, not created through the UI by a real
+    // super_admin click) — the column stays nullable for exactly this case.
+    await pool.query(`
+      INSERT INTO departments (name, slug) VALUES
+        ('Software Renewals', 'software-renewals'),
+        ('Hardware Renewals', 'hardware-renewals')
+      ON CONFLICT (slug) DO NOTHING;
+
+      INSERT INTO categories (department_id, name, slug)
+      SELECT d.id, c.name, c.slug FROM departments d
+      CROSS JOIN (VALUES ('AWS', 'aws'), ('Microsoft', 'microsoft')) AS c(name, slug)
+      WHERE d.slug = 'software-renewals'
+      ON CONFLICT (department_id, slug) DO NOTHING;
+
+      INSERT INTO categories (department_id, name, slug)
+      SELECT d.id, c.name, c.slug FROM departments d
+      CROSS JOIN (VALUES ('Servers', 'servers'), ('Networking', 'networking')) AS c(name, slug)
+      WHERE d.slug = 'hardware-renewals'
+      ON CONFLICT (department_id, slug) DO NOTHING;
+    `);
+
+    // Migrate existing role values. Both steps are self-limiting (they only
+    // match the OLD role strings), so once migrated they're no-ops on every
+    // later boot even though this file re-runs unconditionally.
+    await pool.query(`
+      -- Promote the earliest-created 'admin' to 'super_admin' — only if no
+      -- super_admin exists yet, so this never re-fires or promotes a second
+      -- one. The system needs at least one super_admin to be able to create
+      -- departments at all; any OTHER existing 'admin' rows become
+      -- dept_admin below instead of also becoming super_admin.
+      UPDATE users SET role = 'super_admin'
+      WHERE id = (SELECT id FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1)
+        AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'super_admin');
+
+      -- Any remaining 'admin' rows default into dept_admin of Software —
+      -- a starting point, reassignable via the Departments UI.
+      UPDATE users SET role = 'dept_admin', department_id = (SELECT id FROM departments WHERE slug = 'software-renewals')
+      WHERE role = 'admin';
+    `);
+
+    // 'sales' -> 'user', round-robin assigned across Software's categories
+    // (deterministic by account creation order) so a fresh migration
+    // immediately has users in *different* categories under the same
+    // department for testing, rather than everyone landing on category #1.
+    await pool.query(`
+      WITH software_categories AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY id) as rn
+        FROM categories
+        WHERE department_id = (SELECT id FROM departments WHERE slug = 'software-renewals')
+      ),
+      sales_users AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) as rn
+        FROM users WHERE role = 'sales'
+      )
+      UPDATE users u
+      SET role = 'user',
+          department_id = (SELECT id FROM departments WHERE slug = 'software-renewals'),
+          category_id = sc.id
+      FROM sales_users su
+      JOIN software_categories sc ON sc.rn = ((su.rn - 1) % GREATEST((SELECT COUNT(*) FROM software_categories), 1)) + 1
+      WHERE u.id = su.id AND u.role = 'sales';
+    `);
+
+    // Only now, after every row has a valid new-model role, tighten the
+    // constraint — done last on purpose (see comment above).
+    await pool.query(`
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('super_admin', 'dept_admin', 'user'));
     `);
 
     // Create automation settings & log tables

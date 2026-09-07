@@ -27,10 +27,10 @@ export default function StatusBadge({
   } else if (s === 'expired' || s === 'failed' || s === 'no' || s === 'high' || s === 'rejected' || s === 'cancelled' || s === 'lost') {
     colorClasses = 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30';
     dotColor = 'bg-rose-500';
-  } else if (s === 'admin') {
+  } else if (s === 'admin' || s === 'super_admin' || s === 'dept_admin') {
     colorClasses = 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border-indigo-500/30';
     dotColor = 'bg-indigo-500';
-  } else if (s === 'sales' || s === 'cst') {
+  } else if (s === 'sales' || s === 'cst' || s === 'user') {
     colorClasses = 'bg-teal-500/15 text-teal-800 dark:text-teal-300 border-teal-500/30';
     dotColor = 'bg-teal-500';
   } else if (s === 'blue' || s === 'info') {

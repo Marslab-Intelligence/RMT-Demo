@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rmt.fullname" . }}-app-config
+  labels:
+    {{- include "rmt.labels" . | nindent 4 }}
+data:
+  NODE_ENV: "production"
+  PORT: {{ .Values.app.port | quote }}
+  FRONTEND_URL: "https://{{ .Values.hostname }}"
+  # Must match FRONTEND_URL exactly — this is the DEMO_MODE safety gate in
+  # server/routes/auth.js: DEMO_MODE only actually activates when
+  # FRONTEND_URL differs from this value, so a stray DEMO_MODE=true in this
+  # deployment's Secret can't accidentally enable the passwordless demo
+  # login on the real on-prem instance.
+  PRODUCTION_FRONTEND_URL: "https://{{ .Values.hostname }}"
+  PGHOST: "{{ include "rmt.fullname" . }}-postgres"
+  PGPORT: "5432"
+  {{- if .Values.secrets.smtp.enabled }}
+  EMAIL_ENABLED: "true"
+  SMTP_HOST: {{ .Values.secrets.smtp.host | quote }}
+  SMTP_PORT: {{ .Values.secrets.smtp.port | quote }}
+  SMTP_USER: {{ .Values.secrets.smtp.user | quote }}
+  SMTP_FROM: {{ .Values.secrets.smtp.from | quote }}
+  {{- else }}
+  EMAIL_ENABLED: "false"
+  {{- end }}
+  {{- if .Values.minio.enabled }}
+  MINIO_ENDPOINT: "{{ include "rmt.fullname" . }}-minio"
+  MINIO_PORT: "9000"
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET: {{ .Values.minio.bucket | quote }}
+  {{- end }}

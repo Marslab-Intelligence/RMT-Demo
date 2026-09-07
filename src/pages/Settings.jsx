@@ -100,7 +100,7 @@ export default function Settings() {
             <span>Profile & Security</span>
           </button>
 
-          {user?.role === 'admin' && (
+          {(user?.role === 'super_admin' || user?.role === 'dept_admin') && (
             <button
               onClick={() => setActiveTab('system')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all border text-left ${
@@ -154,7 +154,7 @@ export default function Settings() {
                       </div>
                       <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Assigned Role</span>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">{user?.role === 'sales' ? 'CST / Sales' : (user?.role || 'User')}</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">{user?.role === 'user' ? 'CST / Sales' : (user?.role || 'User')}</span>
                       </div>
                     </div>
                   </div>
@@ -222,7 +222,7 @@ export default function Settings() {
             </>
           )}
 
-          {activeTab === 'system' && user?.role === 'admin' && (
+          {activeTab === 'system' && (user?.role === 'super_admin' || user?.role === 'dept_admin') && (
             <div className="card p-6 border-amber-500/25 bg-amber-500/5 backdrop-blur-xl shadow-xl space-y-4">
               <div className="flex items-center gap-3 pb-3 border-b border-amber-500/20">
                 <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">

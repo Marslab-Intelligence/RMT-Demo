@@ -1,4 +1,5 @@
 import db from '../db.js';
+import { buildScopeClause } from '../utils/scope.js';
 
 /**
  * Constrained, structured query engine for the agent's "answer anything about
@@ -10,9 +11,10 @@ import db from '../db.js';
  * operator, sort direction) is resolved through a fixed allow-list constant;
  * a name that isn't in the list is rejected, never interpolated. Every VALUE
  * goes in as a bound parameter — nothing from the spec is ever concatenated
- * into the query string. Row-level scoping for a 'sales' user is appended by
- * this code unconditionally, after the model's WHERE clause and regardless
- * of it — the model has no way to see, omit, or override it.
+ * into the query string. Row-level RBAC scoping (department_id/category_id/
+ * owner/sales_email per server/utils/scope.js) is appended by this code
+ * unconditionally, after the model's WHERE clause and regardless of it — the
+ * model has no way to see, omit, or override it.
  */
 
 // Only one table is queryable this way, and it carries no secrets (unlike
@@ -129,12 +131,15 @@ export function compileQuerySpec(spec, user) {
 
   // Row-level scoping — appended here, unconditionally, after everything the
   // model produced. Nothing above this point can remove or weaken it.
-  if (user?.role === 'sales') {
-    params.push(user.full_name || '');
-    const ownerIdx = params.length;
-    params.push(user.email || '');
-    const emailIdx = params.length;
-    whereClauses.push(`(LOWER(owner) = LOWER($${ownerIdx}) OR LOWER(sales_email) = LOWER($${emailIdx}))`);
+  {
+    const scope = buildScopeClause(user || {}, params.length + 1);
+    params.push(...scope.params);
+    if (scope.clause) {
+      // buildScopeClause returns a clause starting with " AND ..." meant to
+      // be appended to an existing WHERE — strip the leading " AND " since
+      // whereClauses here are joined with AND separately below.
+      whereClauses.push(scope.clause.replace(/^\s*AND\s*/, ''));
+    }
   }
 
   // ── GROUP BY ────────────────────────────────────────────────────────────

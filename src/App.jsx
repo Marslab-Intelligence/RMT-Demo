@@ -30,12 +30,12 @@ const Trash = safeLazy(() => import('./pages/Trash'));
 const Notifications = safeLazy(() => import('./pages/Notifications'));
 const ActivityLogs = safeLazy(() => import('./pages/ActivityLogs'));
 const Visits = safeLazy(() => import('./pages/Visits'));
-const UserManagement = safeLazy(() => import('./pages/UserManagement'));
 const EmailAutomation = safeLazy(() => import('./pages/EmailAutomation'));
 const ClientDetails = safeLazy(() => import('./pages/ClientDetails'));
 const Pricing = safeLazy(() => import('./pages/Pricing'));
 const ApprovalInbox = safeLazy(() => import('./pages/ApprovalInbox'));
 const AgentHealth = safeLazy(() => import('./pages/AgentHealth'));
+const Departments = safeLazy(() => import('./pages/Departments'));
 
 const PageLoader = () => (
   <div className="min-h-[60vh] w-full flex items-center justify-center">
@@ -56,7 +56,7 @@ const ProtectedRoute = ({ children }) => {
 const AdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-900"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div></div>;
-  if (!user || user.role !== 'admin') return <Navigate to="/" replace />;
+  if (!user || (user.role !== 'super_admin' && user.role !== 'dept_admin')) return <Navigate to="/" replace />;
   return <Layout>{children}</Layout>;
 };
 
@@ -83,7 +83,8 @@ function App() {
           <Route path="/approval-inbox" element={<ProtectedRoute><ApprovalInbox /></ProtectedRoute>} />
           <Route path="/agent-health" element={<AdminRoute><AgentHealth /></AdminRoute>} />
           
-          <Route path="/admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><Departments /></AdminRoute>} />
+          <Route path="/admin/departments" element={<Navigate to="/admin/users" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -28,7 +28,7 @@ test('Phase 2 - Approval Tier Classifications', () => {
 });
 
 test('Phase 2 - Agent Execution Budgeting & Loop Prevention', async () => {
-  const user = { role: 'sales', full_name: 'John Sales', email: 'john@example.com' };
+  const user = { role: 'user', full_name: 'John Sales', email: 'john@example.com' };
   const res = await runAgentTask({ prompt: 'Show portfolio summary', user });
 
   assert.equal(res.completed, true);

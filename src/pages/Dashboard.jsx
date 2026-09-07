@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
@@ -16,46 +16,144 @@ import {
   ArrowUpRight,
   Bell,
   TrendingUp,
-  TrendingDown,
   FileText,
   Percent,
   PhoneCall,
   ArrowRight,
   Sparkles,
-  ChevronRight,
-  Layers,
-  Zap
+  Calendar,
+  Download,
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '../utils/formatters';
 import EmptyState from '../components/common/EmptyState';
 import StatusBadge from '../components/common/StatusBadge';
+import MetricCard from '../components/common/MetricCard';
+import AreaGraphVisualizer from '../components/AreaGraphVisualizer';
+import RadialGauge from '../components/RadialGauge';
+import IndianDateInput from '../components/IndianDateInput';
+
+const DATE_PRESETS = [
+  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 30 days', days: 30 },
+  { label: 'Last 90 days', days: 90 },
+  { label: 'This month', thisMonth: true },
+];
+
+const formatRangeLabel = (start, end) => {
+  const opts = { month: 'short', day: 'numeric' };
+  return `${new Date(start).toLocaleDateString('en-US', opts)} – ${new Date(end).toLocaleDateString('en-US', opts)}`;
+};
+
+const ACTION_QUEUE_CONFIG = [
+  { key: 'dueToday', label: 'Due today', filter: 'dateRange=today' },
+  { key: 'overdue', label: 'Overdue', filter: 'dateRange=expired' },
+  { key: 'followupsDueToday', label: 'Follow-ups pending', filter: 'pendingFollowup=true' },
+  { key: 'clientResponse', label: 'Awaiting client response', filter: 'renewalConfirmation=awaiting_client_approval' },
+  { key: 'quotePending', label: 'Quotes pending', filter: 'quotesSent=true' },
+  { key: 'paymentPending', label: 'Payment pending', filter: 'paymentStatus=No' }
+];
 
 export default function Dashboard() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [selectedQuarterIdx, setSelectedQuarterIdx] = useState(null); // Portfolio Attainment quarter tab; null = "All" (current month)
   const [actionableItems, setActionableItems] = useState([]);
-  const [activityLogs, setActivityLogs] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [actionQueue, setActionQueue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isModalClosed, setIsModalClosed] = useState(false);
   const [prevUnreadCount, setPrevUnreadCount] = useState(0);
+
+  // Top-right date-range filter — scopes the revenue trend chart and the
+  // upcoming-renewals board to a window the user picks. dueToday/overdue/etc.
+  // stay as live snapshots (unaffected): they're "as of right now" figures
+  // computed server-side, not a time series RMT stores, so filtering them to
+  // an arbitrary past window would mean fabricating numbers.
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const dateFilterRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dateFilterRef.current && !dateFilterRef.current.contains(e.target)) {
+        setShowDateFilter(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const applyPreset = (preset) => {
+    const end = new Date();
+    let start;
+    if (preset.thisMonth) {
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+    } else {
+      start = new Date();
+      start.setDate(start.getDate() - preset.days);
+    }
+    setDateRange({ start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) });
+  };
+
+  const clearDateRange = () => setDateRange({ start: null, end: null });
+
+  const isDateFiltered = Boolean(dateRange.start && dateRange.end);
+
+  const filteredMonthlyData = useMemo(() => {
+    if (!isDateFiltered) return monthlyData;
+    const startMonth = dateRange.start.slice(0, 7);
+    const endMonth = dateRange.end.slice(0, 7);
+    return monthlyData.filter((m) => m.month >= startMonth && m.month <= endMonth);
+  }, [monthlyData, isDateFiltered, dateRange]);
+
+  const filteredActionableItems = useMemo(() => {
+    if (!isDateFiltered) return actionableItems;
+    return actionableItems.filter((item) => {
+      if (!item.renewal_date) return false;
+      const d = new Date(item.renewal_date).toISOString().slice(0, 10);
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [actionableItems, isDateFiltered, dateRange]);
+
+  const filteredRevenueTotal = filteredMonthlyData.reduce((sum, m) => sum + (parseFloat(m.revenue) || 0), 0);
+
+  const handleExport = () => {
+    const rows = filteredMonthlyData.map((m) => ({
+      month: m.month,
+      renewals: m.count,
+      revenue: m.revenue,
+      profit: m.profit,
+    }));
+    if (rows.length === 0) {
+      return;
+    }
+    const headers = Object.keys(rows[0]).join(',');
+    const body = rows.map((r) => Object.values(r).join(',')).join('\n');
+    const csv = `data:text/csv;charset=utf-8,${headers}\n${body}`;
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csv));
+    link.setAttribute('download', `dashboard-summary${isDateFiltered ? `_${dateRange.start}_to_${dateRange.end}` : ''}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       if (!token) return;
       try {
-        const isAdmin = user?.role === 'admin';
-        const hasNotifications = user?.role === 'sales' || user?.role === 'admin';
+        const hasNotifications = user?.role === 'user' || (user?.role === 'super_admin' || user?.role === 'dept_admin');
 
         const promises = [
           fetch('/api/dashboard/stats', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('/api/dashboard/actionable-items?limit=8', { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch('/api/dashboard/actionable-items?limit=8', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/dashboard/charts/monthly', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/dashboard/notification-center', { headers: { 'Authorization': `Bearer ${token}` } })
         ];
-
-        if (isAdmin) {
-          promises.push(fetch('/api/dashboard/activity-logs?limit=5', { headers: { 'Authorization': `Bearer ${token}` } }));
-        }
 
         if (hasNotifications) {
           promises.push(
@@ -67,16 +165,12 @@ export default function Dashboard() {
 
         if (results[0].ok) setStats(await results[0].json());
         if (results[1].ok) setActionableItems(await results[1].json());
-
-        let idx = 2;
-        if (isAdmin) {
-          if (results[idx]?.ok) setActivityLogs(await results[idx].json());
-          idx++;
-        }
+        if (results[2].ok) setMonthlyData(await results[2].json());
+        if (results[3].ok) setActionQueue(await results[3].json());
 
         if (hasNotifications) {
-          if (results[idx]?.ok) {
-            const data = await results[idx].json();
+          if (results[4]?.ok) {
+            const data = await results[4].json();
             const fetched = data.notifications || [];
             setNotifications(fetched);
             const filtered = fetched.filter(notif => notif.title?.toLowerCase() !== 'email sent');
@@ -96,7 +190,7 @@ export default function Dashboard() {
   }, [token, user]);
 
   useEffect(() => {
-    if (!token || (user?.role !== 'sales' && user?.role !== 'admin')) return;
+    if (!token || (user?.role !== 'user' && (user?.role !== 'super_admin' && user?.role !== 'dept_admin'))) return;
     
     const fetchNotificationsOnly = async () => {
       try {
@@ -350,6 +444,49 @@ export default function Dashboard() {
   const filteredNotifications = notifications.filter(notif => notif.title?.toLowerCase() !== 'email sent');
   const unreadNotifications = filteredNotifications.filter(n => n.read === 0);
 
+  // Attainment gauges — three ratios that have a natural 100% ceiling (unlike
+  // most of RMT's data, which has no stored "target"/quota field), so each
+  // can honestly be shown as "% of target" without fabricating a goal number.
+  const conversionPct = stats?.conversionRate || 0;
+  const retentionPct = stats?.total > 0
+    ? Math.round((stats.active / stats.total) * 100)
+    : 0;
+
+  // Quarter selector for the attainment card — always shows real calendar
+  // quarters (Q1 = Jan-Mar, ... Q4 = Oct-Dec) of the current year, so the
+  // tabs are always present regardless of how much data is loaded. Only
+  // "Revenue Capture" reacts to it: it's the only one of the three gauges
+  // with real per-month figures (monthlyData) behind it. Conversion &
+  // retention are live snapshots — RMT doesn't store a historical breakdown
+  // for those — so they stay constant across quarters, labeled as such.
+  const currentYear = new Date().getFullYear();
+  const calendarQuarters = [0, 1, 2, 3].map((q) => {
+    const monthNums = [q * 3 + 1, q * 3 + 2, q * 3 + 3];
+    return monthNums.map((n) => `${currentYear}-${String(n).padStart(2, '0')}`);
+  });
+
+  let revenueCapturePct = 0;
+  let revenueCaptureSublabel = `${formatCurrency(stats?.revenueThisMonth || 0)} of ${formatCurrency(stats?.expectedRevenue || 0)}`;
+  if (selectedQuarterIdx === null) {
+    revenueCapturePct = stats?.expectedRevenue > 0
+      ? Math.round((stats.revenueThisMonth / stats.expectedRevenue) * 100)
+      : 0;
+  } else {
+    const quarterMonthKeys = calendarQuarters[selectedQuarterIdx];
+    const quarterRevenue = monthlyData
+      .filter((m) => quarterMonthKeys.includes(m.month))
+      .reduce((sum, m) => sum + (parseFloat(m.revenue) || 0), 0);
+    const perQuarterTarget = (stats?.expectedRevenue || 0) / 4;
+    revenueCapturePct = perQuarterTarget > 0 ? Math.round((quarterRevenue / perQuarterTarget) * 100) : 0;
+    const monthLabels = quarterMonthKeys.map((m) => {
+      const d = new Date(`${m}-01`);
+      return isNaN(d) ? m : d.toLocaleDateString('en-US', { month: 'short' });
+    }).join('–');
+    revenueCaptureSublabel = `${formatCurrency(quarterRevenue)} in ${monthLabels}`;
+  }
+
+  const blendedAttainment = Math.round((conversionPct + revenueCapturePct + retentionPct) / 3);
+
   return (
     <div className="space-y-8 pb-8">
       {/* Header Section */}
@@ -360,355 +497,343 @@ export default function Dashboard() {
             Welcome back, <span className="font-semibold text-black dark:text-surface-200">{user?.fullName}</span>. Prioritize immediate actions and manage upcoming renewals.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => navigate('/renewals')}
-            className="btn-primary text-xs px-4 py-2 flex items-center gap-2 shadow-md shadow-brand-500/20"
+        <div className="flex items-center gap-2.5">
+          <div ref={dateFilterRef} className="relative">
+            <button
+              onClick={() => setShowDateFilter((v) => !v)}
+              className="dropdown-btn-glass h-9 px-3 text-xs flex items-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+              <span className="font-semibold">
+                {isDateFiltered ? formatRangeLabel(dateRange.start, dateRange.end) : 'All time'}
+              </span>
+              {isDateFiltered ? (
+                <span
+                  onClick={(e) => { e.stopPropagation(); clearDateRange(); }}
+                  className="p-0.5 -mr-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
+                  title="Clear filter"
+                >
+                  <X className="w-3 h-3" />
+                </span>
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
+            </button>
+
+            {showDateFilter && (
+              <div className="absolute right-0 mt-2 w-72 dropdown-menu-glass z-50 p-3.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 mb-2">Quick ranges</p>
+                <div className="grid grid-cols-2 gap-1.5 mb-3">
+                  {DATE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => { applyPreset(preset); setShowDateFilter(false); }}
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-black/[0.03] dark:bg-white/[0.05] hover:bg-brand-500/10 hover:text-brand-600 dark:hover:text-brand-400 text-surface-700 dark:text-surface-300 transition-colors text-left"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 mb-2">Custom range</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <IndianDateInput
+                    value={dateRange.start}
+                    onChange={(val) => setDateRange((prev) => ({ ...prev, start: val }))}
+                    placeholder="Start"
+                    size="sm"
+                  />
+                  <IndianDateInput
+                    value={dateRange.end}
+                    onChange={(val) => setDateRange((prev) => ({ ...prev, end: val }))}
+                    placeholder="End"
+                    size="sm"
+                  />
+                </div>
+                {isDateFiltered && (
+                  <button
+                    onClick={() => { clearDateRange(); setShowDateFilter(false); }}
+                    className="w-full mt-3 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleExport}
+            disabled={filteredMonthlyData.length === 0}
+            className="btn-secondary h-9 px-3 text-xs flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export the currently filtered monthly summary as CSV"
           >
-            <Layers className="w-4 h-4" />
-            <span>Open Renewal Manager</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export</span>
           </button>
         </div>
       </div>
 
-      {/* 10 iPhone Liquid Glass Metrics Cards Grid */}
-      <motion.div 
+      {/* Primary stat row — highest-signal metrics, Dashboard-11 style */}
+      <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"
       >
-        {widgets.map((widget) => {
+        {[
+          { id: 'dueToday', title: 'Due Today', value: stats?.dueToday || 0, icon: CalendarCheck, color: 'amber', badgeText: 'Today', onClick: () => navigate('/renewals?dateRange=today') },
+          { id: 'dueThisWeek', title: 'Due This Week', value: stats?.dueThisWeek || 0, icon: CalendarDays, color: 'cyan', badgeText: '7 Days', onClick: () => navigate('/renewals?dateRange=next7') },
+          { id: 'overdue', title: 'Overdue', value: stats?.overdue || 0, icon: AlertTriangle, color: 'rose', badgeText: 'Urgent', onClick: () => navigate('/renewals?dateRange=expired') },
+          { id: 'pendingClientApproval', title: 'Approvals', value: stats?.pendingClientApproval || 0, icon: Clock, color: 'purple', badgeText: 'Open', onClick: () => navigate('/renewals?renewalConfirmation=pending') },
+          { id: 'revenueThisMonth', title: 'Revenue This Month', value: formatCurrency(stats?.revenueThisMonth || 0), icon: IndianRupee, color: 'emerald', badgeText: 'MTD', onClick: () => navigate('/renewals?status=Renewed') },
+        ].map((m) => (
+          <motion.div key={m.id} variants={item}>
+            <MetricCard title={m.title} value={m.value} icon={m.icon} color={m.color} badgeText={m.badgeText} onClick={m.onClick} />
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Secondary metrics row — same compact single-row card shape as the
+          primary stat row above it (icon + title/badge + value), just kept
+          on each widget's own gradient palette instead of MetricCard's. */}
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"
+      >
+        {widgets.filter(w => ['dueThisMonth', 'quotesSent', 'expectedRevenue', 'conversionRate', 'pendingFollowups'].includes(w.id)).map((widget) => {
           const Icon = widget.icon;
           return (
             <motion.div
               key={widget.id}
               variants={item}
               onClick={widget.onClick}
-              className={`p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 cursor-pointer relative overflow-hidden group flex flex-col justify-between ${widget.cardStyle}`}
+              className={`group relative overflow-hidden rounded-2xl border p-4 backdrop-blur-xl transition-all duration-300 flex items-center gap-3.5 shadow-lg shadow-black/5 hover:-translate-y-1 hover:shadow-xl cursor-pointer ${widget.cardStyle}`}
             >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className={`p-2 rounded-xl backdrop-blur-md ${widget.iconStyle}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-sm ${widget.badgeStyle}`}>
+              <div className="pointer-events-none absolute top-0 left-4 right-4 h-[1px] bg-gradient-to-r from-transparent via-white/40 dark:via-white/20 to-transparent" />
+
+              <div className={`p-3 rounded-xl border flex-shrink-0 backdrop-blur-md transition-transform duration-300 group-hover:scale-105 ${widget.iconStyle}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-1">
+                  <p className="text-[8px] font-black uppercase tracking-wide text-slate-700 dark:text-slate-400 leading-tight">
+                    {widget.title}
+                  </p>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-extrabold uppercase tracking-wide border backdrop-blur-md flex-shrink-0 whitespace-nowrap ${widget.badgeStyle}`}>
                     {widget.badgeText}
                   </span>
                 </div>
-                <h3 className="text-xs font-bold text-black dark:text-white/90 transition-colors leading-tight">
-                  {widget.title}
-                </h3>
-                <div className="text-2xl font-black text-black dark:text-white mt-1 group-hover:scale-105 transition-transform origin-left">
+                <p className="text-lg sm:text-xl font-black text-slate-950 dark:text-white mt-1 leading-none tracking-tight">
                   {widget.value}
-                </div>
-              </div>
-              <div className="mt-4 pt-2.5 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-[11px] font-bold text-black dark:text-white/70">
-                <span>View items</span>
-                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-black dark:text-white/80" />
+                </p>
               </div>
             </motion.div>
           );
         })}
       </motion.div>
 
-      {/* Priority Action Needed Section */}
+      {/* Portfolio attainment — radial gauges against a natural 100% target */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="card p-6 border-t-4 border-amber-500 shadow-md"
+        transition={{ delay: 0.28 }}
+        className="card p-6 shadow-md"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-surface-900 dark:text-white flex items-center gap-2">
-                Immediate Action Required
-                <span className="text-xs font-normal text-surface-500 dark:text-surface-400">
-                  (Top Priorities Needing Attention)
-                </span>
-              </h2>
-              <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
-                Renewals due today, overdue, or waiting on client follow-up decision
-              </p>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h2 className="text-base font-bold text-surface-900 dark:text-white">Portfolio Attainment</h2>
+            <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
+              {selectedQuarterIdx === null
+                ? 'Live performance against a 100% target'
+                : 'Revenue Capture shown for the selected quarter · Conversion & Retention are live totals'}
+            </p>
           </div>
-          <button
-            onClick={() => navigate('/renewals?dateRange=expired')}
-            className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
-          >
-            <span>View All Priorities</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+
+          <div className="flex items-center p-1 bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl w-fit">
+            <button
+              onClick={() => setSelectedQuarterIdx(null)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedQuarterIdx === null ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              All
+            </button>
+            {[0, 1, 2, 3].map((idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedQuarterIdx(idx)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  selectedQuarterIdx === idx ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Q{idx + 1}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {actionableItems.length === 0 ? (
-          <EmptyState
-            icon={CheckCircle2}
-            title="All caught up!"
-            description="No high-priority overdue or due today items currently pending."
-            compact={true}
-            className="py-6"
+        <div className="flex flex-wrap items-start justify-around gap-8">
+          <RadialGauge
+            percent={conversionPct}
+            color="#10b981"
+            label="Renewal Conversion"
+            sublabel={`${stats?.renewed || 0} of ${stats?.total || 0} renewed`}
           />
-        ) : (
-          <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200/60 dark:border-white/10">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200/60 dark:border-white/10 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-black bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md">
-                  <th className="py-3 px-4">Client & Service</th>
-                  <th className="py-3 px-4">Due Date</th>
-                  <th className="py-3 px-4">Value</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Follow-up</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-xs">
-                {actionableItems.map((item) => {
-                  const isDueToday = item.renewal_date && new Date(item.renewal_date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-                  const isOverdue = item.renewal_date && new Date(item.renewal_date) < new Date(new Date().setHours(0,0,0,0));
+          <RadialGauge
+            percent={revenueCapturePct}
+            color="#6366f1"
+            label="Revenue Capture"
+            sublabel={revenueCaptureSublabel}
+          />
+          <RadialGauge
+            percent={retentionPct}
+            color="#f59e0b"
+            label="Active Retention"
+            sublabel={`${stats?.active || 0} of ${stats?.total || 0} active`}
+          />
+        </div>
 
-                  return (
-                    <tr 
-                      key={item.id}
-                      onClick={() => navigate(`/renewals?search=${encodeURIComponent(item.client_name)}`)}
-                      className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors cursor-pointer group"
-                    >
-                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
-                        <div className="truncate max-w-[200px]">{item.client_name}</div>
-                        <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[200px]">{item.service}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono font-medium whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          isDueToday 
-                            ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 animate-pulse' 
-                            : isOverdue 
-                              ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30' 
-                              : 'text-slate-700 dark:text-slate-300'
-                        }`}>
-                          {item.renewal_date ? formatDate(item.renewal_date) : 'N/A'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                        {formatCurrency(item.value)}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <StatusBadge status={item.status} size="xs" />
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                        {item.follow_up_status || 'Pending'}
-                      </td>
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/renewals?search=${encodeURIComponent(item.client_name)}`);
-                          }}
-                          className="px-3 py-1.5 text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 rounded-xl transition-all border border-brand-500/20 inline-flex items-center gap-1 shadow-sm"
-                        >
-                          <span>Review</span>
-                          <ArrowUpRight className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="mt-6 pt-4 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Blended attainment</span>
+          <span className="text-sm font-black text-slate-900 dark:text-white">{blendedAttainment}%</span>
+        </div>
       </motion.div>
 
-      {/* Liquid Glass Profit & Loss Metric Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Total Profit Card */}
-        <div 
-          onClick={() => navigate('/renewals')}
-          className="p-6 rounded-2xl border backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer relative overflow-hidden group flex justify-between items-center bg-gradient-to-br from-emerald-500/15 via-teal-400/10 to-emerald-500/5 dark:from-emerald-950/40 dark:via-teal-900/30 dark:to-slate-900/60 border-emerald-400/50 dark:border-emerald-500/40 shadow-lg shadow-emerald-500/5 hover:border-emerald-500/80 hover:shadow-emerald-500/15"
-        >
-          <div className="flex flex-col justify-between h-full z-10">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-widest">Total Portfolio Profit</span>
+      {/* Board + Chart (left) / Action Queue (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left: upcoming renewals board + revenue trend */}
+        <div className="lg:col-span-2 space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="card p-6 shadow-md"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-surface-900 dark:text-white">Upcoming renewals</h2>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
+                    {isDateFiltered
+                      ? `Showing ${filteredActionableItems.length} of ${actionableItems.length} matching ${formatRangeLabel(dateRange.start, dateRange.end)}`
+                      : 'Due today, overdue, or waiting on a client decision'}
+                  </p>
+                </div>
               </div>
-              <div className="text-3xl font-black text-black dark:text-white mt-1.5">{formatCurrency(stats?.profit || 0)}</div>
+              <button
+                onClick={() => navigate('/renewals?dateRange=expired')}
+                className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
+              >
+                <span>View all</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div className="flex items-center gap-2 mt-4 text-emerald-950 dark:text-emerald-300 text-xs font-bold bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/40 w-fit backdrop-blur-md">
-              <TrendingUp className="w-4 h-4" />
-              <span>Active portfolio yield</span>
-            </div>
-          </div>
-          <div className="p-4 rounded-2xl bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 backdrop-blur-md group-hover:scale-110 transition-transform">
-            <TrendingUp className="w-8 h-8" />
-          </div>
+
+            {filteredActionableItems.length === 0 ? (
+              <EmptyState
+                icon={CheckCircle2}
+                title={isDateFiltered ? 'Nothing in this range' : 'All caught up!'}
+                description={isDateFiltered ? 'No renewals fall within the selected date range.' : 'No high-priority overdue or due today items currently pending.'}
+                compact={true}
+                className="py-6"
+              />
+            ) : (
+              <div className="divide-y divide-slate-200/50 dark:divide-white/5">
+                {filteredActionableItems.map((rItem) => (
+                  <div
+                    key={rItem.id}
+                    onClick={() => navigate(`/renewals?search=${encodeURIComponent(rItem.client_name)}`)}
+                    className="flex items-center gap-3 py-3 cursor-pointer group hover:bg-black/[0.02] dark:hover:bg-white/[0.03] -mx-2 px-2 rounded-xl transition-colors"
+                  >
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-700">
+                      {rItem.client_name?.charAt(0)?.toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{rItem.client_name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{rItem.service}</p>
+                    </div>
+                    <div className="hidden sm:block text-right">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(rItem.value)}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {rItem.renewal_date ? formatDate(rItem.renewal_date) : 'N/A'}
+                      </p>
+                    </div>
+                    <StatusBadge status={rItem.status} size="xs" />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/renewals?search=${encodeURIComponent(rItem.client_name)}`); }}
+                      className="hidden lg:inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 rounded-xl transition-all border border-brand-500/20"
+                    >
+                      Review <ArrowUpRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+            <AreaGraphVisualizer
+              title={isDateFiltered ? `Revenue Trend (${formatRangeLabel(dateRange.start, dateRange.end)})` : 'Renewal Revenue Trend'}
+              type="profit"
+              totalValue={isDateFiltered ? filteredRevenueTotal : (stats?.revenueThisMonth || 0)}
+              monthlyData={filteredMonthlyData}
+              height="h-[280px]"
+            />
+          </motion.div>
         </div>
 
-        {/* Total Loss Card */}
-        <div 
-          onClick={() => navigate('/renewals?status=Expired')}
-          className="p-6 rounded-2xl border backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer relative overflow-hidden group flex justify-between items-center bg-gradient-to-br from-rose-500/15 via-red-400/10 to-rose-500/5 dark:from-rose-950/40 dark:via-red-900/30 dark:to-slate-900/60 border-rose-400/50 dark:border-rose-500/40 shadow-lg shadow-rose-500/5 hover:border-rose-500/80 hover:shadow-rose-500/15"
+        {/* Right: action queue */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32 }}
+          className="card p-5 shadow-md lg:sticky lg:top-4"
         >
-          <div className="flex flex-col justify-between h-full z-10">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                <span className="text-[11px] font-bold text-rose-900 dark:text-rose-300 uppercase tracking-widest">Total Loss (Expired)</span>
-              </div>
-              <div className="text-3xl font-black text-black dark:text-white mt-1.5">{formatCurrency(stats?.loss || 0)}</div>
-            </div>
-            <div className="flex items-center gap-2 mt-4 text-rose-950 dark:text-rose-300 text-xs font-bold bg-rose-500/20 px-3 py-1 rounded-full border border-rose-500/40 w-fit backdrop-blur-md">
-              <TrendingDown className="w-4 h-4" />
-              <span>Expired service losses</span>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-surface-900 dark:text-white">Action queue</h2>
+            {actionQueue?.categories && (
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                {Object.values(actionQueue.categories).reduce((a, b) => a + b, 0)} before cutoff
+              </span>
+            )}
           </div>
-          <div className="p-4 rounded-2xl bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40 backdrop-blur-md group-hover:scale-110 transition-transform">
-            <TrendingDown className="w-8 h-8" />
+
+          {!actionQueue?.categories || Object.values(actionQueue.categories).every(v => !v) ? (
+            <EmptyState icon={CheckCircle2} title="Queue is clear" description="Nothing needs attention right now." compact className="py-4" />
+          ) : (
+            <div className="space-y-2">
+              {ACTION_QUEUE_CONFIG.filter(c => (actionQueue.categories[c.key] || 0) > 0).map((c) => (
+                <div key={c.key} className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.04] dark:border-white/[0.06]">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{c.label}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{actionQueue.categories[c.key]} item{actionQueue.categories[c.key] > 1 ? 's' : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/renewals?${c.filter}`)}
+                    className="flex-shrink-0 px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 rounded-lg transition-all border border-brand-500/20"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span>Cutoff: end of day</span>
+            <span>{unreadNotifications.length} unread update{unreadNotifications.length !== 1 ? 's' : ''}</span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Modern Activity Feed & Live Updates Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className={`grid grid-cols-1 ${
-          user?.role === 'admin' 
-            ? 'md:grid-cols-2 xl:grid-cols-2' 
-            : 'md:grid-cols-1 xl:grid-cols-1'
-        } gap-6`}
-      >
-        {/* Logs Container - Admin Only */}
-        {user?.role === 'admin' && (
-          <div className="p-6 rounded-2xl border bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border-white/80 dark:border-white/15 shadow-xl shadow-black/5 relative overflow-hidden flex flex-col justify-between">
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-black/10 dark:border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/40 backdrop-blur-md">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-base font-extrabold text-black dark:text-white leading-none">System Audit Logs</h2>
-                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-400 mt-1">Live user actions & system activity</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => navigate('/activity-logs')} 
-                className="text-xs text-brand-700 dark:text-brand-300 font-bold hover:underline bg-brand-500/10 px-3 py-1 rounded-full border border-brand-500/20 backdrop-blur-md"
-              >
-                View All
-              </button>
-            </div>
-
-            <div className="space-y-3.5 flex-1">
-               {activityLogs.length === 0 ? (
-                 <EmptyState
-                   icon={Zap}
-                   title="No recent activity"
-                   description="User actions and system changes will appear here."
-                   compact={true}
-                 />
-               ) : (
-                  activityLogs.slice(0, 5).map(log => (
-                    <div key={log.id} className="flex items-center gap-3.5 p-2.5 rounded-xl bg-white/50 dark:bg-slate-800/40 border border-white/60 dark:border-white/10 hover:border-brand-500/40 transition-all group">
-                       <div className="w-2.5 h-2.5 rounded-full bg-brand-500 flex-shrink-0 group-hover:scale-125 transition-transform shadow-sm shadow-brand-500/50"></div>
-                       <div className="flex-1 min-w-0">
-                         <p className="text-xs font-bold text-black dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{log.details}</p>
-                         <p className="text-[10px] font-bold text-slate-700 dark:text-slate-400 mt-0.5">
-                           {formatDateTime(log.created_at)}
-                         </p>
-                       </div>
-                    </div>
-                  ))
-               )}
-            </div>
-          </div>
-        )}
-
-        {/* Updates Container */}
-        {(user?.role === 'sales' || user?.role === 'admin') && (
-          <div className="p-6 rounded-2xl border bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border-white/80 dark:border-white/15 shadow-xl shadow-black/5 relative overflow-hidden flex flex-col justify-between">
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-black/10 dark:border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md">
-                  <Bell className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-extrabold text-black dark:text-white leading-none">Live Updates & Alerts</h2>
-                    {filteredNotifications.some(n => n.read === 0) && (
-                      <span className="bg-amber-500/20 text-amber-950 dark:text-amber-200 border border-amber-500/40 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
-                        NEW
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-400 mt-1">Real-time status changes & notifications</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => navigate('/notifications')} 
-                className="text-xs text-brand-700 dark:text-brand-300 font-bold hover:underline bg-brand-500/10 px-3 py-1 rounded-full border border-brand-500/20 backdrop-blur-md"
-              >
-                View All
-              </button>
-            </div>
-
-            <div className="space-y-3 flex-1">
-              {filteredNotifications.length === 0 ? (
-                <EmptyState
-                  icon={Bell}
-                  title="No recent updates"
-                  description="Notifications and renewal reminders will appear here."
-                  compact={true}
-                />
-              ) : (
-                filteredNotifications.slice(0, 5).map(notif => {
-                  const notifColorMap = {
-                    success: 'bg-emerald-500 border-emerald-500/50',
-                    warning: 'bg-amber-500 border-amber-500/50',
-                    error: 'bg-rose-500 border-rose-500/50',
-                    info: 'bg-blue-500 border-blue-500/50'
-                  };
-                  const bulletStyle = notifColorMap[notif.type] || 'bg-brand-500 border-brand-500/50';
-                  
-                  return (
-                    <div 
-                      key={notif.id} 
-                      onClick={() => handleNotificationClick(notif)}
-                      className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-all border ${
-                        notif.read === 0 
-                          ? 'bg-amber-500/10 dark:bg-amber-500/10 border-amber-400/40 shadow-sm' 
-                          : 'bg-white/50 dark:bg-slate-800/40 border-white/60 dark:border-white/10 hover:border-brand-500/40'
-                      }`}
-                    >
-                      <div className={`w-2.5 h-2.5 rounded-full ${bulletStyle} mt-1 flex-shrink-0 ${notif.read === 0 ? 'animate-pulse scale-110' : ''}`}></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-black text-black dark:text-white truncate">
-                            {notif.title}
-                          </p>
-                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 flex-shrink-0">
-                            {formatDateTime(notif.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-300 mt-1 break-words leading-relaxed">
-                          {notif.message}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-      </motion.div>
-
       {/* Unread Notifications Alert Modal */}
-      {(user?.role === 'sales' || user?.role === 'admin') && unreadNotifications.length > 0 && !isModalClosed && createPortal(
+      {(user?.role === 'user' || (user?.role === 'super_admin' || user?.role === 'dept_admin')) && unreadNotifications.length > 0 && !isModalClosed && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden animate-scale-up">
             {/* Header */}

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: rmt
+description: >
+  Renewal Management Tracker (RMT) — on-prem Kubernetes deployment.
+  Packages the app Deployment, an in-cluster Postgres StatefulSet, an
+  in-cluster MinIO (S3-compatible) object store for visit photos, a nightly
+  pg_dump backup CronJob, and the Ingress/TLS wiring — as a single
+  reproducible `helm install`/`helm upgrade` for whoever stands this up on
+  the org's own hardware.
+type: application
+version: 1.0.0
+appVersion: "1.1.0"

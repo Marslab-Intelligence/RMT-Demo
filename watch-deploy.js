@@ -25,7 +25,7 @@ function triggerDeploy() {
 
   isBuilding = true;
   pendingBuild = false;
-  console.log('\n🚀 Code change detected in Antigravity! Executing ECR Push & Remote Deployment...');
+  console.log('\n🚀 Code change detected in Antigravity! Executing Registry Push & Remote Deployment...');
 
   const start = Date.now();
   exec('./push.sh', (error, stdout, stderr) => {

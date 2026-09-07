@@ -1,0 +1,18 @@
+RMT deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+App:        https://{{ .Values.hostname }}
+Postgres:   {{ include "rmt.fullname" . }}-postgres:5432 (in-cluster only)
+{{- if .Values.minio.enabled }}
+MinIO API:  {{ include "rmt.fullname" . }}-minio:9000 (in-cluster only)
+{{- end }}
+{{- if .Values.backup.enabled }}
+Backups:    CronJob "{{ include "rmt.fullname" . }}-postgres-backup" ({{ .Values.backup.schedule }}), PVC "{{ include "rmt.fullname" . }}-backups"
+{{- end }}
+
+Check rollout status:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "rmt.fullname" . }}
+
+If this is a first install, run the photo-storage migration once MinIO is up
+and reachable (see charts/rmt/README.md "Post-install steps"):
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "rmt.fullname" . }} -- \
+    node server/migratePhotosToObjectStorage.js

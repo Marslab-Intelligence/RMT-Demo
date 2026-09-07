@@ -28,7 +28,7 @@ router.get('/status', authenticateToken, async (req, res) => {
 });
 
 // Update automation status (Admin only)
-router.post('/toggle', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/toggle', authenticateToken, requireRole('super_admin'), async (req, res) => {
   const { action, note } = req.body;
 
   if (!action || !['start', 'stop'].includes(action)) {
@@ -64,8 +64,8 @@ router.post('/toggle', authenticateToken, requireRole('admin'), async (req, res)
     try {
       const { rows: recipients } = await db.query(`
         SELECT email FROM users 
-        WHERE role = 'sales' 
-          AND email IS NOT NULL 
+        WHERE role = 'user'
+          AND email IS NOT NULL
           AND email != ''
       `);
       
@@ -81,7 +81,7 @@ router.post('/toggle', authenticateToken, requireRole('admin'), async (req, res)
         });
         await db.query(`
           INSERT INTO email_logs (renewal_id, client_name, service, recipient_email, recipient_type, email_type, subject, status, error_message)
-          VALUES (NULL, 'System / Automation', 'Email Automation Toggle', $1, 'sales', 'automation_toggle', $2, $3, $4)
+          VALUES (NULL, 'System / Automation', 'Email Automation Toggle', $1, 'user', 'automation_toggle', $2, $3, $4)
         `, [toEmails.join(','), subject, emailResult.success ? 'sent' : 'failed', emailResult.error || null]);
         console.log(`✉️ Automation toggle notification email sent to: ${toEmails.join(', ')}`);
       }

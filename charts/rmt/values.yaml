@@ -1,0 +1,116 @@
+# RMT on-prem Helm chart — default values.
+#
+# Anything marked REQUIRED must be overridden (e.g. via -f my-values.yaml or
+# --set) before `helm install` — the chart intentionally does not ship with
+# working secrets. See README.md for the full pre-install checklist.
+
+image:
+  # REQUIRED — set by push.sh via --set image.repository=... image.tag=...,
+  # or fill in directly if deploying manually.
+  repository: "registry.internal.marslab.local:5000/rmt"
+  tag: "latest"
+  pullPolicy: Always
+
+# Docker-registry pull secret name. If your registry requires auth, create it
+# once with:
+#   kubectl create secret docker-registry rmt-registry-secret \
+#     --docker-server=<REGISTRY_URL> --docker-username=<user> --docker-password=<pass>
+imagePullSecretName: rmt-registry-secret
+
+app:
+  # Pinned to 1 on purpose — server/services/scheduler.js runs the
+  # reminder-ladder emails and auto status transitions as an in-process
+  # node-cron job with no distributed lock. More than 1 replica means every
+  # scheduled email goes out once per replica (duplicate reminders to
+  # clients). Documented tradeoff, not an oversight — do not bump this
+  # without first moving the scheduler behind a CronJob-triggered internal
+  # endpoint (see the migration notes in README.md).
+  replicas: 1
+  port: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# REQUIRED — the hostname this deployment will actually be served on. Used
+# for the Ingress rule, CORS, the JWT refresh-cookie domain, and links in
+# outgoing emails. Must be a real hostname the org's DNS resolves.
+hostname: "rmt.internal.marslab.local"
+
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    enabled: true
+    # cert-manager ClusterIssuer name. Point this at whichever issuer your
+    # cluster has configured — an internal CA issuer for a purely internal
+    # hostname, or letsencrypt-prod if the cluster has outbound HTTPS egress
+    # and the hostname is publicly resolvable. See README.md.
+    clusterIssuer: "internal-ca-issuer"
+    secretName: rmt-tls
+
+storageClass: "longhorn"
+
+postgres:
+  image: "postgres:15-alpine"
+  storageSize: "20Gi"
+  # REQUIRED — filled into the `rmt-secret` Secret (see secret.yaml). Do not
+  # commit real values here; pass them via --set or a separate, untracked
+  # values file.
+  user: "marslab_user"
+  database: "marslab_db"
+  # password: "" — REQUIRED, no default on purpose.
+
+minio:
+  enabled: true
+  image: "minio/minio:latest"
+  storageSize: "20Gi"
+  bucket: "rmt-visit-photos"
+  # accessKey / secretKey — REQUIRED, no default on purpose.
+
+backup:
+  enabled: true
+  # Daily at 02:00 — adjust to whatever retention window IT is comfortable
+  # with. See templates/backup-cronjob.yaml and README.md for the matching
+  # restore procedure.
+  schedule: "0 2 * * *"
+  retentionDays: 14
+  storageSize: "50Gi"
+
+secrets:
+  # All REQUIRED, no defaults — see README.md "Required secrets" table.
+  # jwtSecret / refreshSecret: 32+ char random strings, generate with e.g.
+  #   openssl rand -base64 48
+  jwtSecret: ""
+  refreshSecret: ""
+
+  # SMTP is the one external integration this on-prem deployment keeps
+  # enabled — reminder-ladder emails and notification emails go out over it.
+  smtp:
+    enabled: true
+    host: "smtp.zoho.in"
+    port: "587"
+    user: "renewals@sidcorptech.net"
+    password: ""
+    from: "Renewals <renewals@sidcorptech.net>"
+
+  # AI Agent (Gemini) — optional. Without it, the agent subsystem runs on
+  # its regex fallback path only (no LLM classification/drafting).
+  geminiApiKey: ""
+
+  # ── Intentionally NOT included ──────────────────────────────────────────
+  # Zoho Books webhook (ZOHO_BOOKS_WEBHOOK_SECRET) and Zoho Cliq notification
+  # webhooks (ZOHO_CLIQ_WEBHOOK_URL / ZOHO_CLIQ_SALES_WEBHOOK_URL) are left
+  # unconfigured for this on-prem deployment per the "SMTP only, no other
+  # external integrations" network policy decided for this migration:
+  #   - The Books webhook route already fails closed (401) with no secret
+  #     configured, so it's a no-op inbound endpoint.
+  #   - Cliq notifications already degrade to a console-log simulation when
+  #     no webhook URL is configured (server/services/cliqService.js).
+  # No app code was removed — set these in a values override later if the
+  # org's network posture changes and Books/Cliq integration is wanted back.
+  # Zoho SSO was already removed from the app in an earlier pass; there is
+  # no login flow depending on it.

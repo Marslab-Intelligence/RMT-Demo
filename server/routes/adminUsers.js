@@ -3,23 +3,51 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { isAdminLike } from '../utils/scope.js';
 
 const router = Router();
 
+// super_admin manages any user; dept_admin manages only users within their
+// own department (enforced per-route below, not just here) — a `user` role
+// never reaches these routes at all.
 const adminOnly = (req, res, next) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required.' });
+  if (!isAdminLike(req.user.role)) return res.status(403).json({ error: 'Admin access required.' });
   next();
 };
 
-const VALID_ROLES = ['admin', 'sales'];
+const VALID_ROLES = ['super_admin', 'dept_admin', 'user'];
 const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#14b8a6'];
+
+// A dept_admin can only ever create/promote users to the 'user' role, and
+// only within their own department — they must never be able to mint another
+// dept_admin or super_admin, or touch another department's roster.
+async function assertDeptAdminScope(req, res, targetUserId) {
+  if (req.user.role !== 'dept_admin') return true; // super_admin unrestricted
+  const { rows } = await db.query('SELECT department_id FROM users WHERE id = $1', [targetUserId]);
+  if (rows.length === 0) {
+    res.status(404).json({ error: 'User not found.' });
+    return false;
+  }
+  if (rows[0].department_id !== req.user.departmentId) {
+    res.status(403).json({ error: 'You do not have access to users outside your department.' });
+    return false;
+  }
+  return true;
+}
 
 // GET /api/admin/users
 router.get('/', authenticateToken, adminOnly, async (req, res) => {
   try {
+    const params = [];
+    let whereClause = '';
+    if (req.user.role === 'dept_admin') {
+      params.push(req.user.departmentId);
+      whereClause = 'WHERE department_id = $1';
+    }
     const { rows } = await db.query(
-      `SELECT id, username, email, full_name, role, avatar_color, is_active, created_at
-       FROM users ORDER BY is_active DESC, role, full_name`
+      `SELECT id, username, email, full_name, role, avatar_color, is_active, created_at, department_id, category_id
+       FROM users ${whereClause} ORDER BY is_active DESC, role, full_name`,
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -30,12 +58,53 @@ router.get('/', authenticateToken, adminOnly, async (req, res) => {
 
 // POST /api/admin/users
 router.post('/', authenticateToken, adminOnly, async (req, res) => {
-  const { email, full_name, role } = req.body;
+  const { email, full_name, role, department_id, category_id } = req.body;
   if (!email || !full_name || !role) {
     return res.status(400).json({ error: 'Email, full name, and role are required.' });
   }
   if (!VALID_ROLES.includes(role)) {
-    return res.status(400).json({ error: 'Invalid role. Must be admin or sales.' });
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  let finalDepartmentId = department_id ? parseInt(department_id, 10) : null;
+  let finalCategoryId = category_id ? parseInt(category_id, 10) : null;
+
+  if (req.user.role === 'dept_admin') {
+    if (role !== 'user') {
+      return res.status(403).json({ error: 'Dept admins can only create users with the "user" role.' });
+    }
+    finalDepartmentId = req.user.departmentId;
+    if (!finalCategoryId) {
+      return res.status(400).json({ error: 'A service (category) is required.' });
+    }
+    const { rows: catRows } = await db.query(
+      'SELECT id FROM categories WHERE id = $1 AND department_id = $2 AND is_active = TRUE',
+      [finalCategoryId, finalDepartmentId]
+    );
+    if (catRows.length === 0) {
+      return res.status(400).json({ error: 'That service does not belong to your department, or is inactive.' });
+    }
+  } else {
+    // super_admin
+    if (role === 'dept_admin' && !finalDepartmentId) {
+      return res.status(400).json({ error: 'A department is required for dept_admin users.' });
+    }
+    if (role === 'user') {
+      if (!finalDepartmentId || !finalCategoryId) {
+        return res.status(400).json({ error: 'Department and service are required for user-role accounts.' });
+      }
+      const { rows: catRows } = await db.query(
+        'SELECT id FROM categories WHERE id = $1 AND department_id = $2 AND is_active = TRUE',
+        [finalCategoryId, finalDepartmentId]
+      );
+      if (catRows.length === 0) {
+        return res.status(400).json({ error: 'That service does not belong to the selected department, or is inactive.' });
+      }
+    }
+    if (role === 'super_admin') {
+      finalDepartmentId = null;
+      finalCategoryId = null;
+    }
   }
 
   try {
@@ -44,10 +113,10 @@ router.post('/', authenticateToken, adminOnly, async (req, res) => {
     const avatar_color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
     const { rows } = await db.query(
-      `INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-       RETURNING id, username, email, full_name, role, avatar_color, is_active`,
-      [username, email.toLowerCase().trim(), placeholderPassword, full_name.trim(), role, avatar_color]
+      `INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active, department_id, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)
+       RETURNING id, username, email, full_name, role, avatar_color, is_active, department_id, category_id`,
+      [username, email.toLowerCase().trim(), placeholderPassword, full_name.trim(), role, avatar_color, finalDepartmentId, finalCategoryId]
     );
 
     await db.query(
@@ -71,6 +140,10 @@ router.put('/:id/role', authenticateToken, adminOnly, async (req, res) => {
   if (!VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'Invalid role.' });
   }
+  if (req.user.role === 'dept_admin' && role !== 'user') {
+    return res.status(403).json({ error: 'Dept admins can only assign the "user" role.' });
+  }
+  if (!(await assertDeptAdminScope(req, res, req.params.id))) return;
   try {
     const { rows } = await db.query(
       `UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
@@ -96,6 +169,7 @@ router.delete('/:id', authenticateToken, adminOnly, async (req, res) => {
   if (parseInt(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'You cannot delete your own account.' });
   }
+  if (!(await assertDeptAdminScope(req, res, req.params.id))) return;
   try {
     const { rows: check } = await db.query(
       `SELECT id, email FROM users WHERE id = $1`,
@@ -139,6 +213,7 @@ router.delete('/:id', authenticateToken, adminOnly, async (req, res) => {
 
 // PUT /api/admin/users/:id/reactivate
 router.put('/:id/reactivate', authenticateToken, adminOnly, async (req, res) => {
+  if (!(await assertDeptAdminScope(req, res, req.params.id))) return;
   try {
     const { rows } = await db.query(
       `UPDATE users SET is_active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1
@@ -164,6 +239,7 @@ router.delete('/:id/permanent', authenticateToken, adminOnly, async (req, res) =
   if (parseInt(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'You cannot permanently delete your own account.' });
   }
+  if (!(await assertDeptAdminScope(req, res, req.params.id))) return;
   try {
     // Only allow permanent deletion of deactivated users
     const { rows: check } = await db.query(

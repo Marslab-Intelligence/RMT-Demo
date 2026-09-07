@@ -5,6 +5,7 @@ import { computeRiskScore } from './riskScorer.js';
 import { parseNaturalLanguageMutation } from './naturalLanguageEditor.js';
 import { classifyIntent, explainRiskScore, generateQuerySpec, rephraseDataQuestion } from './geminiClient.js';
 import { runQuerySpec } from './queryEngine.js';
+import { isAdminLike } from '../utils/scope.js';
 
 const MAX_STEPS = 12;
 
@@ -183,7 +184,7 @@ export async function runAgentTask({ prompt, context = {}, user }) {
     // agent is even authorized to ATTEMPT for this user's role, not what
     // rows come back.
     const permission = TOOL_PERMISSIONS[toolCall.toolName] || 'any_role';
-    if (permission === 'admin_only' && user?.role !== 'admin') {
+    if (permission === 'admin_only' && !isAdminLike(user?.role)) {
       const reason = "You don't have permission to do that — this action requires an administrator.";
       history.push({ step, action: toolCall.toolName, status: 'denied', reason });
       finalResult = `🚫 ${reason}`;
@@ -301,7 +302,7 @@ async function determineNextToolCall(prompt, context, user) {
   // TOOL_PERMISSIONS check in runAgentTask (which also covers the regex
   // fallback path below) — this just narrows what Gemini can pick from in
   // the first place, mirroring the app's real RBAC.
-  const allowedTools = user?.role === 'admin'
+  const allowedTools = isAdminLike(user?.role)
     ? ROUTABLE_TOOLS
     : ROUTABLE_TOOLS.filter((t) => TOOL_PERMISSIONS[t] !== 'admin_only');
 

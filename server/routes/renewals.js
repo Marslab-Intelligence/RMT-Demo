@@ -8,6 +8,7 @@ import { sendEmail } from '../services/emailService.js';
 import { renewalExpiredAdminEmail } from '../templates/emailTemplates.js';
 import jwt from 'jsonwebtoken';
 import { registerClient, broadcastEvent } from '../services/realtime.js';
+import { assertRecordVisible, fetchAndCheckScope, filterIdsByScope, buildScopeClause, isAdminLike } from '../utils/scope.js';
 
 // SECURITY: Escape HTML entities to prevent XSS in user-generated content
 function escapeHtml(str) {
@@ -20,58 +21,65 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
-// SECURITY: object-level ownership check for the 'sales' role. Renewals were
-// previously readable/writable by any authenticated sales user via any ID —
-// confirmed exploitable in a security audit (GET/PUT/PATCH /api/renewals/:id
-// for a renewal owned by a different rep returned 200). Mirrors the ownership
-// pattern already used in server/routes/visits.js. Never applies to admin/cst
-// — only 'sales' is scoped, matching the same role check used everywhere else
-// in this file (queryBuilder.js's agent tools use the identical comparison).
-function isOwnedBySalesUser(renewal, user) {
-  if (!renewal) return false;
-  const ownerMatch = (renewal.owner || '').toLowerCase() === (user.fullName || '').toLowerCase();
-  const emailMatch = (renewal.sales_email || '').toLowerCase() === (user.email || '').toLowerCase();
-  return ownerMatch || emailMatch;
+// Friendly display label for a role, used in activity-log/notification/Cliq
+// text — avoids "Dept_admin"/"Super_admin" showing up verbatim to a human.
+const ROLE_DISPLAY_LABELS = { super_admin: 'Super Admin', dept_admin: 'Dept Admin', user: 'User' };
+function roleDisplayLabel(role) {
+  return ROLE_DISPLAY_LABELS[role] || 'User';
 }
 
+// RBAC v2: thin wrappers kept under their original names so the ~15 call
+// sites below didn't need touching — the actual department/category-aware
+// logic now lives in server/utils/scope.js (shared with dashboard.js,
+// adminUsers.js, and the AI agent tools) since the same visibility rule
+// applies everywhere, not just here.
 function assertRenewalOwnership(renewal, req, res) {
-  if (req.user.role === 'sales' && !isOwnedBySalesUser(renewal, req.user)) {
-    res.status(403).json({ error: 'You do not have access to this renewal record.' });
-    return false;
-  }
-  return true;
+  return assertRecordVisible(renewal, req.user, res);
+}
+
+async function fetchAndCheckOwnership(id, req, res) {
+  return fetchAndCheckScope(db, id, req.user, res);
+}
+
+async function filterIdsByOwnership(ids, req) {
+  return filterIdsByScope(db, ids, req.user);
 }
 
 /**
- * For routes that UPDATE by id without already having fetched the row (most
- * of them go straight to an UPDATE ... WHERE id = $1 RETURNING *). Fetches
- * just enough to check ownership before the real query runs. Returns null
- * (and has already sent a 404/403 response) if the caller should stop.
+ * Resolves the department_id/category_id a NEW renewal should be created
+ * under, based on the creator's role — never trusts a client-supplied
+ * department/category outside what the creator is actually scoped to:
+ *   - 'user': forced to their own department/category (client input ignored).
+ *   - 'dept_admin': forced to their own department; category_id must be
+ *     supplied in the body and must actually belong to that department.
+ *   - 'super_admin': both must be supplied in the body; category_id is
+ *     validated against the given department_id.
+ * Returns { department_id, category_id } on success, or null after already
+ * sending a 400 response.
  */
-async function fetchAndCheckOwnership(id, req, res) {
-  const { rows } = await db.query('SELECT owner, sales_email FROM renewals WHERE id = $1', [id]);
-  if (rows.length === 0) {
-    res.status(404).json({ error: 'Renewal not found.' });
+async function resolveScopeForCreate(req, res, bodyDepartmentId, bodyCategoryId) {
+  const user = req.user;
+  if (user.role === 'user') {
+    return { department_id: user.departmentId, category_id: user.categoryId };
+  }
+
+  let department_id = user.role === 'dept_admin' ? user.departmentId : parseInt(bodyDepartmentId, 10);
+  const category_id = parseInt(bodyCategoryId, 10);
+
+  if (!department_id || !category_id) {
+    res.status(400).json({ error: 'Department and Service (category) are required.' });
     return null;
   }
-  if (!assertRenewalOwnership(rows[0], req, res)) return null;
-  return rows[0];
-}
 
-/**
- * Batch-route equivalent: silently narrows an ids array down to the subset a
- * 'sales' caller actually owns, rather than 403ing the whole batch — a bulk
- * action against a client-supplied id list is expected to sometimes include
- * ids the UI never should have offered; dropping them is safer than an error
- * that would confirm/deny another rep's record IDs exist.
- */
-async function filterIdsByOwnership(ids, req) {
-  if (req.user.role !== 'sales') return ids;
   const { rows } = await db.query(
-    `SELECT id FROM renewals WHERE id = ANY($1) AND (LOWER(owner) = LOWER($2) OR LOWER(sales_email) = LOWER($3))`,
-    [ids, req.user.fullName || '', req.user.email || '']
+    'SELECT id FROM categories WHERE id = $1 AND department_id = $2 AND is_active = TRUE',
+    [category_id, department_id]
   );
-  return rows.map(r => r.id);
+  if (rows.length === 0) {
+    res.status(400).json({ error: 'That service does not belong to the selected department, or is inactive.' });
+    return null;
+  }
+  return { department_id, category_id };
 }
 
 const router = Router();
@@ -129,23 +137,14 @@ const notifyAdminAndSales = async (title, message, type = 'info', link = null) =
 // Get all renewals
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    // Auto-revert renewals marked as 'renewed' back to 'pending' when they have less than 30 days left
-    await db.query(`
-      UPDATE renewals 
-      SET renewal_confirmation = 'pending' 
-      WHERE renewal_confirmation = 'renewed' 
-        AND renewal_date IS NOT NULL 
-        AND (renewal_date - CURRENT_DATE) < 30
-    `);
-
-    // Auto-confirm renewals as 'renewed' when they have more than 30 days left
-    await db.query(`
-      UPDATE renewals 
-      SET renewal_confirmation = 'renewed' 
-      WHERE renewal_confirmation != 'renewed' 
-        AND renewal_date IS NOT NULL 
-        AND (renewal_date - CURRENT_DATE) > 30
-    `);
+    // PERF: this used to run two unscoped, whole-table UPDATEs (auto-flip
+    // renewal_confirmation pending<->renewed) on EVERY load of this list —
+    // the single most-hit endpoint in the app, also re-fired on every
+    // debounced search keystroke from the frontend. A full-table UPDATE scan
+    // twice per list load, with real risk of row-lock contention when
+    // multiple users load the list at once. Identical logic already runs
+    // every 15 minutes in server/services/scheduler.js's processRenewals() —
+    // removed here as pure redundancy, not a behavior change.
 
     const { search, status, sort, order, page = 1, limit = 50, dateRange, valueRange, renewalConfirmation, clientName, serviceName, invoiceStatus, paymentStatus, quotesSent, pendingFollowup } = req.query;
     let query = 'SELECT * FROM renewals WHERE 1=1';
@@ -366,14 +365,16 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     }
 
-    // SECURITY: row-level scoping for the 'sales' role — a sales user only
-    // ever sees their own clients. Appended after every other filter above,
-    // unconditionally, so no combination of query params can widen it.
-    if (req.user.role === 'sales') {
-      const pOwner = paramIndex++;
-      const pEmail = paramIndex++;
-      query += ` AND (LOWER(owner) = LOWER($${pOwner}) OR LOWER(sales_email) = LOWER($${pEmail}))`;
-      params.push(req.user.fullName || '', req.user.email || '');
+    // RBAC v2: row-level scoping by role. Appended after every other filter
+    // above, unconditionally, so no combination of query params can widen
+    // it. super_admin sees everything; dept_admin is scoped to their
+    // department; user is scoped to their category AND their own
+    // owner/assignment (see server/utils/scope.js for why both).
+    {
+      const { clause, params: scopeParams } = buildScopeClause(req.user, paramIndex);
+      query += clause;
+      params.push(...scopeParams);
+      paramIndex += scopeParams.length;
     }
 
     const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as total');
@@ -450,9 +451,10 @@ router.get('/edits-history', authenticateToken, async (req, res) => {
     const { limit = 50 } = req.query;
     const params = [parseInt(limit)];
     let scopeClause = '';
-    if (req.user.role === 'sales') {
-      scopeClause = 'WHERE (LOWER(r.owner) = LOWER($2) OR LOWER(r.sales_email) = LOWER($3))';
-      params.push(req.user.fullName || '', req.user.email || '');
+    const scope = buildScopeClause(req.user, 2, 'r');
+    if (scope.clause) {
+      scopeClause = 'WHERE 1=1' + scope.clause;
+      params.push(...scope.params);
     }
     const { rows } = await db.query(`
       SELECT rh.*, u.full_name as performed_by_name, u.role as performed_by_role,
@@ -472,7 +474,7 @@ router.get('/edits-history', authenticateToken, async (req, res) => {
 });
 
 // Manual scheduler trigger - Admin only
-router.post('/trigger-scheduler', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/trigger-scheduler', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { processRenewals } = await import('../services/scheduler.js');
     processRenewals().catch(err => console.error('Scheduler trigger error (non-blocking):', err)); // fire async
@@ -484,13 +486,15 @@ router.post('/trigger-scheduler', authenticateToken, requireRole('admin'), async
 });
 
 // Get all deleted renewals (Trash) - Admin only
-router.get('/trash', authenticateToken, requireRole('admin'), async (req, res) => {
+router.get('/trash', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
+    const scope = buildScopeClause(req.user, 1);
     const { rows: trash } = await db.query(`
-      SELECT * FROM trash_renewals 
+      SELECT * FROM trash_renewals
+      WHERE 1=1 ${scope.clause}
       ORDER BY deleted_at DESC
-    `);
-    
+    `, scope.params);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -510,7 +514,7 @@ router.get('/trash', authenticateToken, requireRole('admin'), async (req, res) =
 });
 
 // Restore multiple renewals - Admin only
-router.post('/trash/restore-batch', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/trash/restore-batch', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'No IDs provided for restore.' });
@@ -520,10 +524,12 @@ router.post('/trash/restore-batch', authenticateToken, requireRole('admin'), asy
   try {
     await client.query('BEGIN');
 
-    // Get all records to restore
+    // Get all records to restore, scoped so a dept_admin can't bulk-restore
+    // another department's trash via a guessed/crafted id list.
+    const restoreScope = buildScopeClause(req.user, 2);
     const { rows: renewals } = await client.query(
-      'SELECT * FROM trash_renewals WHERE id = ANY($1)',
-      [ids]
+      `SELECT * FROM trash_renewals WHERE id = ANY($1) ${restoreScope.clause}`,
+      [ids, ...restoreScope.params]
     );
 
     if (renewals.length === 0) {
@@ -536,23 +542,25 @@ router.post('/trash/restore-batch', authenticateToken, requireRole('admin'), asy
       // avoiding conflicts if the original ID was already reused)
       await client.query(`
         INSERT INTO renewals (
-          unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status, 
-          locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent, 
-          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at, 
+          unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status,
+          locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent,
+          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at,
           edit_status, edit_reason, expiry_reason, renewal_confirmation, contact_number, reference_id, invoice_status,
-          invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number
+          invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number,
+          department_id, category_id
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-          $11, $12, $13, $14, $15, $16, $17, 
-          $18, $19, $20, $21, $22, $23, $24, 
-          $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+          $11, $12, $13, $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23, $24,
+          $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
         )
       `, [
         renewal.unique_id, renewal.client_name, renewal.service, renewal.renewal_date, renewal.value, renewal.owner, renewal.client_email, renewal.sales_email, renewal.status,
         renewal.locked, renewal.follow_up_status, renewal.follow_up_remarks, renewal.day_30_sent, renewal.day_20_sent, renewal.day_15_sent, renewal.day_10_sent,
         renewal.day_5_sent, renewal.day_3_sent, renewal.day_0_sent, renewal.sales_15_sent, renewal.sales_5_sent, renewal.created_by, renewal.created_at, renewal.updated_at,
         renewal.edit_status, renewal.edit_reason, renewal.expiry_reason, renewal.renewal_confirmation, renewal.contact_number, renewal.reference_id, renewal.invoice_status,
-        renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || ''
+        renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || '',
+        renewal.department_id, renewal.category_id
       ]);
 
       // Remove from trash_renewals
@@ -580,7 +588,7 @@ router.post('/trash/restore-batch', authenticateToken, requireRole('admin'), asy
 });
 
 // Permanent delete multiple renewals - Admin only
-router.post('/trash/delete-batch', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/trash/delete-batch', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'No IDs provided for deletion.' });
@@ -590,10 +598,13 @@ router.post('/trash/delete-batch', authenticateToken, requireRole('admin'), asyn
   try {
     await client.query('BEGIN');
 
-    // Get unique_ids/names for activity logs before deleting
+    // Get unique_ids/names for activity logs before deleting, scoped so a
+    // dept_admin can't permanently delete another department's trash via a
+    // guessed/crafted id list.
+    const deleteScope = buildScopeClause(req.user, 2);
     const { rows: renewals } = await client.query(
-      'SELECT unique_id, client_name, service FROM trash_renewals WHERE id = ANY($1)',
-      [ids]
+      `SELECT id, unique_id, client_name, service FROM trash_renewals WHERE id = ANY($1) ${deleteScope.clause}`,
+      [ids, ...deleteScope.params]
     );
 
     if (renewals.length === 0) {
@@ -601,8 +612,8 @@ router.post('/trash/delete-batch', authenticateToken, requireRole('admin'), asyn
       return res.status(404).json({ error: 'No deleted renewals found for provided IDs.' });
     }
 
-    // Delete permanently from trash_renewals
-    await client.query('DELETE FROM trash_renewals WHERE id = ANY($1)', [ids]);
+    // Delete permanently from trash_renewals — only the scoped subset found above.
+    await client.query('DELETE FROM trash_renewals WHERE id = ANY($1)', [renewals.map(r => r.id)]);
 
     for (const renewal of renewals) {
       await client.query(`
@@ -624,7 +635,7 @@ router.post('/trash/delete-batch', authenticateToken, requireRole('admin'), asyn
 });
 
 // Update invoice status - Sales and Admin
-router.patch('/:id/invoice', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.patch('/:id/invoice', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { invoice_status, invoice_number, invoice_value, invoice_sent_date, invoice_type } = req.body;
   const docType = (invoice_type === 'Sales Order') ? 'Sales Order' : 'Invoice';
   if (!['Sent', 'Not'].includes(invoice_status)) {
@@ -683,7 +694,7 @@ router.patch('/:id/invoice', authenticateToken, requireRole('sales', 'admin', 'c
 });
 
 // Toggle stop_email for a single client renewal record - Sales and Admin
-router.patch('/:id/stop-email', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.patch('/:id/stop-email', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { stop_email } = req.body;
   if (typeof stop_email !== 'boolean') {
     return res.status(400).json({ error: 'stop_email must be a boolean.' });
@@ -708,7 +719,7 @@ router.patch('/:id/stop-email', authenticateToken, requireRole('sales', 'admin',
 });
 
 // Batch stop/resume email for multiple client renewals - Sales and Admin
-router.post('/batch-stop-email', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.post('/batch-stop-email', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { ids, stop_email } = req.body;
   if (!Array.isArray(ids) || ids.length === 0 || typeof stop_email !== 'boolean') {
     return res.status(400).json({ error: 'Invalid payload. Expecting ids array and stop_email boolean.' });
@@ -729,7 +740,7 @@ router.post('/batch-stop-email', authenticateToken, requireRole('sales', 'admin'
 });
 
 // Batch update status / renewal confirmation
-router.post('/batch-update-status', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.post('/batch-update-status', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { ids, status, renewal_confirmation } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'Invalid payload. Expecting ids array.' });
@@ -757,7 +768,7 @@ router.post('/batch-update-status', authenticateToken, requireRole('sales', 'adm
 });
 
 // Batch send reminder emails
-router.post('/batch-send-reminder', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.post('/batch-send-reminder', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'Invalid payload. Expecting ids array.' });
@@ -804,21 +815,25 @@ router.post('/batch-send-reminder', authenticateToken, requireRole('sales', 'adm
 });
 
 // Batch delete renewals (Admin only)
-router.post('/batch-delete', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/batch-delete', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'Invalid payload. Expecting ids array.' });
   }
 
   try {
-    await db.query(`UPDATE renewals SET is_deleted = true, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1)`, [ids]);
-    
+    const allowedIds = await filterIdsByOwnership(ids, req);
+    if (allowedIds.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to these records.' });
+    }
+    await db.query(`UPDATE renewals SET is_deleted = true, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1)`, [allowedIds]);
+
     await db.query(`
       INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
       VALUES ($1, 'batch_delete', 'renewals', 'BULK', $2)
-    `, [req.user.id, `Admin bulk deleted ${ids.length} renewal record(s).`]);
+    `, [req.user.id, `Admin bulk deleted ${allowedIds.length} renewal record(s).`]);
 
-    res.json({ message: `Successfully deleted ${ids.length} renewal record(s).` });
+    res.json({ message: `Successfully deleted ${allowedIds.length} renewal record(s).` });
   } catch (err) {
     console.error('Batch delete error:', err);
     res.status(500).json({ error: 'Failed to batch delete renewals.' });
@@ -826,7 +841,7 @@ router.post('/batch-delete', authenticateToken, requireRole('admin'), async (req
 });
 
 // Update payment details - Sales and Admin
-router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.patch('/:id/payment', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   const { payment_status, payment_amount, payment_received_date } = req.body;
   if (!['Yes', 'No'].includes(payment_status)) {
     return res.status(400).json({ error: 'Invalid payment_status. Must be "Yes" or "No".' });
@@ -869,8 +884,8 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
     const r = rows[0];
     console.log(`💰 [Payment Update] Record ${r.unique_id} updated. payment_status=${payment_status}, updated_by=${req.user.fullName} (${req.user.role})`);
 
-    // Notification condition: Trigger if payment status is updated to "Yes" by an authorized role (sales or admin)
-    if ((req.user.role === 'sales' || req.user.role === 'admin') && payment_status === 'Yes') {
+    // Notification condition: Trigger if payment status is updated to "Yes" by an authorized role
+    if ((req.user.role === 'user' || isAdminLike(req.user.role)) && payment_status === 'Yes') {
       console.log(`💰 [Payment Update] Sending notifications for confirmed payment of ${r.unique_id}...`);
       // 1. Send Cliq notification to sales channels
       try {
@@ -885,8 +900,8 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
 
       // 2. Send email to admin and CST (sales) team
       try {
-        const { rows: admins } = await db.query(`SELECT email FROM users WHERE role = 'admin' AND is_active = true`);
-        const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'sales' AND is_active = true`);
+        const { rows: admins } = await db.query(`SELECT email FROM users WHERE role IN ('super_admin','dept_admin') AND is_active = true`);
+        const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'user' AND is_active = true`);
         
         const adminEmails = admins.map(a => a.email).filter(Boolean);
         const salesEmails = salesUsers.map(s => s.email).filter(Boolean);
@@ -955,33 +970,38 @@ router.patch('/:id/payment', authenticateToken, requireRole('sales', 'admin', 'c
 });
 
 // Restore renewal - Admin only
-router.put('/:id/restore', authenticateToken, requireRole('admin'), async (req, res) => {
+router.put('/:id/restore', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM trash_renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Deleted renewal not found.' });
+    if (req.user.role === 'dept_admin' && renewal.department_id !== req.user.departmentId) {
+      return res.status(403).json({ error: 'You do not have access to this record.' });
+    }
 
     // Insert back into renewals (omit id to let auto-increment assign a new one,
     // avoiding conflicts if the original ID was already reused)
     await db.query(`
       INSERT INTO renewals (
-        unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status, 
-        locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent, 
-        day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at, 
+        unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status,
+        locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent,
+        day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at,
         edit_status, edit_reason, expiry_reason, renewal_confirmation, contact_number, reference_id, invoice_status,
-        invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number
+        invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number,
+        department_id, category_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-        $11, $12, $13, $14, $15, $16, $17, 
-        $18, $19, $20, $21, $22, $23, $24, 
-        $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17,
+        $18, $19, $20, $21, $22, $23, $24,
+        $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
       )
     `, [
       renewal.unique_id, renewal.client_name, renewal.service, renewal.renewal_date, renewal.value, renewal.owner, renewal.client_email, renewal.sales_email, renewal.status,
       renewal.locked, renewal.follow_up_status, renewal.follow_up_remarks, renewal.day_30_sent, renewal.day_20_sent, renewal.day_15_sent, renewal.day_10_sent,
       renewal.day_5_sent, renewal.day_3_sent, renewal.day_0_sent, renewal.sales_15_sent, renewal.sales_5_sent, renewal.created_by, renewal.created_at, renewal.updated_at,
       renewal.edit_status, renewal.edit_reason, renewal.expiry_reason, renewal.renewal_confirmation, renewal.contact_number, renewal.reference_id, renewal.invoice_status,
-      renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || ''
+      renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || '',
+      renewal.department_id, renewal.category_id
     ]);
 
     // Update ID sequence to prevent serial collision
@@ -1004,11 +1024,12 @@ router.put('/:id/restore', authenticateToken, requireRole('admin'), async (req, 
 });
 
 // Permanent delete renewal - Admin only
-router.delete('/:id/permanent', authenticateToken, requireRole('admin'), async (req, res) => {
+router.delete('/:id/permanent', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM trash_renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Deleted renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     // Since it was already deleted from renewals, related history/logs were cascade-deleted.
     // We just delete from trash_renewals.
@@ -1030,18 +1051,14 @@ router.delete('/:id/permanent', authenticateToken, requireRole('admin'), async (
 // Get expired renewals with no expiry reason
 router.get('/expired-no-reason', authenticateToken, async (req, res) => {
   try {
-    const params = [];
-    let scopeClause = '';
-    if (req.user.role === 'sales') {
-      scopeClause = ' AND (LOWER(owner) = LOWER($1) OR LOWER(sales_email) = LOWER($2))';
-      params.push(req.user.fullName || '', req.user.email || '');
-    }
+    const scope = buildScopeClause(req.user, 1);
+    const params = scope.params;
     const { rows } = await db.query(`
       SELECT * FROM renewals
       WHERE status = 'Expired'
         AND (expiry_reason IS NULL OR TRIM(expiry_reason) = '')
         AND is_deleted = false
-        ${scopeClause}
+        ${scope.clause}
       ORDER BY renewal_date ASC
     `, params);
     res.json(rows);
@@ -1051,25 +1068,15 @@ router.get('/expired-no-reason', authenticateToken, async (req, res) => {
   }
 });
 
-export async function syncRenewalConfirmationStatus(id) {
-  await db.query(`
-    UPDATE renewals 
-    SET renewal_confirmation = 'pending' 
-    WHERE id = $1
-      AND renewal_confirmation = 'renewed' 
-      AND renewal_date IS NOT NULL 
-      AND (renewal_date - CURRENT_DATE) < 30
-  `, [id]);
-
-  await db.query(`
-    UPDATE renewals 
-    SET renewal_confirmation = 'renewed' 
-    WHERE id = $1
-      AND renewal_confirmation != 'renewed' 
-      AND renewal_date IS NOT NULL 
-      AND (renewal_date - CURRENT_DATE) > 30
-  `, [id]);
-}
+// PERF: syncRenewalConfirmationStatus (single-row UPDATE x2) used to run on
+// every GET /:id — a read endpoint doing writes on the critical path, tripling
+// its round trips to the DB (2 UPDATEs + the SELECT, sequential/awaited).
+// The identical transition logic already runs every 15 minutes in
+// server/services/scheduler.js's processRenewals() — this was 100%
+// redundant, not a different behavior. Removed; a renewal's
+// renewal_confirmation now settles within the existing 15-min cron cycle
+// instead of instantly on view, which is imperceptible for a value that only
+// flips once at the 30-day boundary.
 
 // Explicit read-only renewal fetch for agent bulk operations (no status mutations)
 router.get('/:id/readonly', authenticateToken, async (req, res) => {
@@ -1107,11 +1114,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid renewal ID parameter.' });
     }
 
-    // Only mutate status if readOnly is NOT requested
-    if (req.query.readOnly !== 'true' && req.query.readOnly !== '1') {
-      await syncRenewalConfirmationStatus(req.params.id);
-    }
-
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
@@ -1135,16 +1137,20 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create renewal
-router.post('/', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.post('/', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
-    const { 
+    const {
       client_name, service, renewal_date, value, owner, client_email, sales_email, contact_number, reference_id, plan_period, plan_duration, invoice_number, quotation_number,
-      product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity
+      product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity,
+      department_id: bodyDepartmentId, category_id: bodyCategoryId
     } = req.body;
 
     if (!client_name || !service || !renewal_date || !owner || !client_email || !contact_number || !invoice_number) {
       return res.status(400).json({ error: 'Client Name, Service, Renewal Date, Contact Person, Client Email, Contact Number, Reference ID, and Invoice Number are required.' });
     }
+
+    const resolvedScope = await resolveScopeForCreate(req, res, bodyDepartmentId, bodyCategoryId);
+    if (!resolvedScope) return;
 
     // SECURITY: Enforce max length on text fields to prevent DB truncation/overflow
     if ([client_name, service, owner].some(v => v.length > 255)) {
@@ -1189,16 +1195,16 @@ router.post('/', authenticateToken, requireRole('sales', 'admin', 'cst'), async 
       INSERT INTO renewals (
         unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, contact_number, reference_id, status, locked, created_by,
         day_30_sent, day_20_sent, day_15_sent, day_10_sent, day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, sales_3_sent, plan_period, renewal_confirmation, invoice_number, plan_duration,
-        product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity, quotation_number
+        product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity, quotation_number, department_id, category_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
       RETURNING id
     `, [
       unique_id, client_name, service, renewal_date, value || 0, owner, client_email, finalSalesEmail, contact_number || '', reference_id || '', computedStatus, req.user.id,
       flags.day_30_sent, flags.day_20_sent, flags.day_15_sent, flags.day_10_sent, flags.day_5_sent, flags.day_3_sent, flags.day_0_sent, flags.sales_15_sent, flags.sales_5_sent, flags.sales_3_sent,
       plan_period || 'yearly_plan', computedRenewalConfirmation, invoice_number, parseInt(plan_duration) || 1,
       product || '', description || '', parseInt(quantity) || 1, parseFloat(purchase_cost) || 0, parseFloat(total_purchase_cost) || 0, parseFloat(sales_cost) || 0, parseFloat(total_sales_cost) || 0, parseFloat(profit) || 0, vendor || '', (entity || '').trim().toUpperCase(),
-      quotation_number || ''
+      quotation_number || '', resolvedScope.department_id, resolvedScope.category_id
     ]);
 
     const newId = result[0].id;
@@ -1214,8 +1220,8 @@ router.post('/', authenticateToken, requireRole('sales', 'admin', 'cst'), async 
 
       // Email CST/Sales with CC to admin(s)
       try {
-        const { rows: admins } = await db.query(`SELECT email FROM users WHERE role = 'admin' AND is_active = true`);
-        const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'sales' AND is_active = true`);
+        const { rows: admins } = await db.query(`SELECT email FROM users WHERE role IN ('super_admin','dept_admin') AND is_active = true`);
+        const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'user' AND is_active = true`);
         
         const adminEmailsList = admins.map(a => a.email).filter(Boolean);
         const salesEmailsList = salesUsers.map(s => s.email).filter(Boolean);
@@ -1283,7 +1289,7 @@ router.post('/', authenticateToken, requireRole('sales', 'admin', 'cst'), async 
 });
 
 // Bulk Import renewals from CSV JSON
-router.post('/import', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/import', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const client = await db.connect();
   try {
     const { records } = req.body;
@@ -1302,6 +1308,11 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
       return res.status(400).json({ error: 'Cannot import more than 1000 records in a single batch.' });
     }
 
+    // RBAC v2: a CSV import targets one department/service for the whole
+    // batch (not per-row) — same resolve-by-role helper as single-create.
+    const importScope = await resolveScopeForCreate(req, res, req.body.department_id, req.body.category_id);
+    if (!importScope) return;
+
     await client.query('BEGIN');
 
     // Get current max RMT ID number across renewals and trash_renewals
@@ -1317,7 +1328,7 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
     });
     let nextNum = maxNum + 1;
 
-    const { rows: activeSales } = await client.query("SELECT email FROM users WHERE role = 'sales' AND is_active = true");
+    const { rows: activeSales } = await client.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
     const activeSalesEmails = activeSales.map(u => u.email.toLowerCase());
 
     const importedIds = [];
@@ -1397,7 +1408,8 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
           quantity, purchase_cost, total_purchase_cost,
           sales_cost, total_sales_cost, profit,
           day_30_sent, day_20_sent, day_15_sent, day_10_sent,
-          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, sales_3_sent, quotation_number
+          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, sales_3_sent, quotation_number,
+          department_id, category_id
         )
         VALUES (
           $1,  $2,  $3,  $4,  $5,
@@ -1407,7 +1419,7 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
           $17, $18, $19, $20,
           $21, $22, $23,
           $24, $25, $26,
-          $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
+          $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
         )
         RETURNING id
       `, [
@@ -1420,7 +1432,7 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
         sCost, totalS, profitVal,
         flags.day_30_sent, flags.day_20_sent, flags.day_15_sent, flags.day_10_sent,
         flags.day_5_sent, flags.day_3_sent, flags.day_0_sent, flags.sales_15_sent, flags.sales_5_sent, flags.sales_3_sent,
-        quotation_number || ''
+        quotation_number || '', importScope.department_id, importScope.category_id
       ]);
 
       const newId = result[0].id;
@@ -1462,7 +1474,7 @@ router.post('/import', authenticateToken, requireRole('admin'), async (req, res)
 });
 
 // Renew client
-router.put('/:id/renew', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.put('/:id/renew', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
@@ -1547,7 +1559,7 @@ router.put('/:id/renew', authenticateToken, requireRole('sales', 'admin', 'cst')
 });
 
 // Update follow-up
-router.put('/:id/follow-up', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.put('/:id/follow-up', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { follow_up_status, follow_up_remarks } = req.body;
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
@@ -1573,7 +1585,7 @@ router.put('/:id/follow-up', authenticateToken, requireRole('sales', 'admin', 'c
 });
 
 // Edit renewal basic details
-router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.put('/:id', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { 
       client_name, service, renewal_date, value, owner, client_email, sales_email, contact_number, reference_id, plan_period, plan_duration, expiry_reason, invoice_number, quotation_number,
@@ -1736,8 +1748,8 @@ router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), asyn
       await sendCliqNotification(`❌ *Renewal Expired*\n*Client:* ${client_name}\n*Service:* ${service}\nClient renewal is expired. Update the reason in RMT application.`, true);
 
         try {
-          const { rows: admins } = await db.query(`SELECT email FROM users WHERE role = 'admin' AND is_active = true`);
-          const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'sales' AND is_active = true`);
+          const { rows: admins } = await db.query(`SELECT email FROM users WHERE role IN ('super_admin','dept_admin') AND is_active = true`);
+          const { rows: salesUsers } = await db.query(`SELECT email FROM users WHERE role = 'user' AND is_active = true`);
           
           const adminEmailsList = admins.map(a => a.email).filter(Boolean);
           const salesEmailsList = salesUsers.map(s => s.email).filter(Boolean);
@@ -1764,7 +1776,7 @@ router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), asyn
       VALUES ($1, 'edit', 'renewal', $2, $3)
     `, [req.user.id, renewal.unique_id, `Edited renewal details for ${client_name}. Reason: ${req.body.reason || 'Not provided'}`]);
 
-    const editActorRole = req.user.role ? (req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)) : 'Unknown';
+    const editActorRole = roleDisplayLabel(req.user.role);
     await notifyAdminAndSales(
       'Renewal Details Updated',
       `Renewal details updated for client "${client_name}" (${service}) by ${editActorRole.toLowerCase()} team. Reason: ${req.body.reason || 'Not provided'}.`,
@@ -1780,7 +1792,7 @@ router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), asyn
       const formattedValue = value !== undefined && value !== null
         ? `₹${parseFloat(value).toLocaleString('en-IN')}`
         : '-';
-      const actorRole = req.user.role ? (req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)) : 'Unknown';
+      const actorRole = roleDisplayLabel(req.user.role);
 
       const cliqMessage = `📝 *Renewal Details Updated*\n` +
         `*Client ID:* ${renewal.unique_id}\n` +
@@ -1817,7 +1829,7 @@ router.put('/:id', authenticateToken, requireRole('sales', 'admin', 'cst'), asyn
 });
 
 // Sales & Admin: Update product cost fields and quotation_number
-router.patch('/:id/product-costs', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.patch('/:id/product-costs', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, quotation_number } = req.body;
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
@@ -1879,14 +1891,15 @@ router.patch('/:id/product-costs', authenticateToken, requireRole('sales', 'admi
 
 // Delete multiple renewals (move to trash table)
 
-router.post('/delete-batch', authenticateToken, requireRole('admin'), async (req, res) => {
+router.post('/delete-batch', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'No IDs provided.' });
   }
 
   try {
-    for (const id of ids) {
+    const allowedIds = await filterIdsByOwnership(ids, req);
+    for (const id of allowedIds) {
       const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [id]);
       const renewal = rows[0];
       if (!renewal) continue;
@@ -1894,16 +1907,17 @@ router.post('/delete-batch', authenticateToken, requireRole('admin'), async (req
       // Move to trash_renewals table
       await db.query(`
         INSERT INTO trash_renewals (
-          original_id, unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status, 
-          locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent, 
-          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at, 
+          original_id, unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status,
+          locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent,
+          day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at,
           edit_status, edit_reason, expiry_reason, renewal_confirmation, contact_number, reference_id, invoice_status,
-          invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number, invoice_type
+          invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number, invoice_type,
+          department_id, category_id
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-          $11, $12, $13, $14, $15, $16, $17, 
-          $18, $19, $20, $21, $22, $23, $24, 
-          $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+          $11, $12, $13, $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23, $24,
+          $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
         )
       `, [
         renewal.id, renewal.unique_id, renewal.client_name, renewal.service, renewal.renewal_date, renewal.value, renewal.owner, renewal.client_email, renewal.sales_email, renewal.status,
@@ -1911,7 +1925,7 @@ router.post('/delete-batch', authenticateToken, requireRole('admin'), async (req
         renewal.day_5_sent, renewal.day_3_sent, renewal.day_0_sent, renewal.sales_15_sent, renewal.sales_5_sent, renewal.created_by, renewal.created_at, renewal.updated_at,
         renewal.edit_status, renewal.edit_reason, renewal.expiry_reason, renewal.renewal_confirmation, renewal.contact_number, renewal.reference_id, renewal.invoice_status,
         renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || '',
-        renewal.invoice_type || 'Invoice'
+        renewal.invoice_type || 'Invoice', renewal.department_id, renewal.category_id
       ]);
 
       // Delete from renewals table
@@ -1939,25 +1953,27 @@ router.post('/delete-batch', authenticateToken, requireRole('admin'), async (req
 });
 
 // Delete renewal (move to trash table)
-router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+router.delete('/:id', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     // Move to trash_renewals table
     await db.query(`
       INSERT INTO trash_renewals (
-        original_id, unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status, 
-        locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent, 
-        day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at, 
+        original_id, unique_id, client_name, service, renewal_date, value, owner, client_email, sales_email, status,
+        locked, follow_up_status, follow_up_remarks, day_30_sent, day_20_sent, day_15_sent, day_10_sent,
+        day_5_sent, day_3_sent, day_0_sent, sales_15_sent, sales_5_sent, created_by, created_at, updated_at,
         edit_status, edit_reason, expiry_reason, renewal_confirmation, contact_number, reference_id, invoice_status,
-        invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number, invoice_type
+        invoice_number, invoice_value, invoice_sent_date, payment_status, payment_amount, payment_received_date, quotation_number, invoice_type,
+        department_id, category_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-        $11, $12, $13, $14, $15, $16, $17, 
-        $18, $19, $20, $21, $22, $23, $24, 
-        $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17,
+        $18, $19, $20, $21, $22, $23, $24,
+        $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
       )
     `, [
       renewal.id, renewal.unique_id, renewal.client_name, renewal.service, renewal.renewal_date, renewal.value, renewal.owner, renewal.client_email, renewal.sales_email, renewal.status,
@@ -1965,7 +1981,7 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
       renewal.day_5_sent, renewal.day_3_sent, renewal.day_0_sent, renewal.sales_15_sent, renewal.sales_5_sent, renewal.created_by, renewal.created_at, renewal.updated_at,
       renewal.edit_status, renewal.edit_reason, renewal.expiry_reason, renewal.renewal_confirmation, renewal.contact_number, renewal.reference_id, renewal.invoice_status,
       renewal.invoice_number, renewal.invoice_value, renewal.invoice_sent_date, renewal.payment_status, renewal.payment_amount, renewal.payment_received_date, renewal.quotation_number || '',
-      renewal.invoice_type || 'Invoice'
+      renewal.invoice_type || 'Invoice', renewal.department_id, renewal.category_id
     ]);
 
     // Delete from renewals table
@@ -2010,7 +2026,7 @@ router.get('/:id/history', authenticateToken, async (req, res) => {
 });
 
 // Request Edit
-router.put('/:id/request-edit', authenticateToken, requireRole('sales'), async (req, res) => {
+router.put('/:id/request-edit', authenticateToken, requireRole('user'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
@@ -2026,7 +2042,7 @@ router.put('/:id/request-edit', authenticateToken, requireRole('sales'), async (
 
     // Send email notification to all admins with a direct approval link
     const { sendEmail } = await import('../services/emailService.js');
-    const { rows: adminUsers } = await db.query("SELECT email FROM users WHERE role = 'admin' AND is_active = true");
+    const { rows: adminUsers } = await db.query("SELECT email FROM users WHERE role IN ('super_admin','dept_admin') AND is_active = true");
     
     // Generate direct email approval token valid for 7 days
     const approveToken = jwt.sign(
@@ -2150,7 +2166,7 @@ router.get('/:id/approve-edit-email', async (req, res) => {
 
     // Send email notification to sales team
     const { sendEmail } = await import('../services/emailService.js');
-    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'sales' AND is_active = true");
+    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
     
     const salesEmails = new Set();
     for (const u of salesUsers) {
@@ -2233,22 +2249,23 @@ router.get('/:id/approve-edit-email', async (req, res) => {
 });
 
 // Approve Edit
-router.put('/:id/approve-edit', authenticateToken, requireRole('admin'), async (req, res) => {
+router.put('/:id/approve-edit', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
+    if (!assertRenewalOwnership(renewal, req, res)) return;
 
     await db.query('UPDATE renewals SET edit_status = $1 WHERE id = $2', ['approved', req.params.id]);
-    
+
     await db.query(`
       INSERT INTO notifications (role, title, message, type)
-      VALUES ('sales', 'Edit Access Approved', $1, 'success')
+      VALUES ('user', 'Edit Access Approved', $1, 'success')
     `, [`Admin approved edit access for ${renewal.client_name}`]);
 
     // Send email notification to sales team
     const { sendEmail } = await import('../services/emailService.js');
-    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'sales' AND is_active = true");
+    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
     
     const salesEmails = new Set();
     for (const u of salesUsers) {
@@ -2318,7 +2335,7 @@ router.put('/:id/approve-edit', authenticateToken, requireRole('admin'), async (
 });
 
 // Renewal Confirmation — Sales team updates renewal status
-router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { renewal_confirmation, remarks } = req.body;
     const validOptions = [
@@ -2471,8 +2488,9 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admi
     const label = labelMap[renewal_confirmation] || renewal_confirmation;
 
     const roleLabels = {
-      admin: 'Admin',
-      sales: 'CST team'
+      super_admin: 'Admin',
+      dept_admin: 'Admin',
+      user: 'CST team'
     };
     const actorRole = roleLabels[req.user.role] || 'CST team';
 
@@ -2539,7 +2557,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admi
     const { sendEmail } = await import('../services/emailService.js');
     
     // Get sales team email(s)
-    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'sales' AND is_active = true");
+    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
 
     const emailHtml = `
     <!DOCTYPE html>
@@ -2613,7 +2631,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('sales', 'admi
 });
 
 // Update expiry reason
-router.put('/:id/expiry-reason', authenticateToken, requireRole('sales', 'admin', 'cst'), async (req, res) => {
+router.put('/:id/expiry-reason', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
     const { expiry_reason } = req.body;
     if (!expiry_reason || !expiry_reason.trim()) {

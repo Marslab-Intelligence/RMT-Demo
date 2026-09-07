@@ -17,28 +17,32 @@ async function seed() {
     if (count === 0) {
       console.log('Seeding initial users...');
       const salt = await bcrypt.genSalt(10);
-      const financePassword = await bcrypt.hash('finance123', salt);
       const salesPassword = await bcrypt.hash('sales123', salt);
       const adminPassword = await bcrypt.hash('admin123', salt);
 
+      // initDb() has already seeded the Software department + its starting
+      // categories by this point — reuse them for the demo dept_admin/user.
+      const { rows: [softwareDept] } = await db.query("SELECT id FROM departments WHERE slug = 'software-renewals'");
+      const { rows: categories } = await db.query('SELECT id FROM categories WHERE department_id = $1 ORDER BY id ASC', [softwareDept.id]);
+
       const users = [
-        ['ranjithkumar.v@marslab.work', 'ranjithkumar.v@marslab.work', salesPassword, 'Ranjith Kumar', 'sales', '#3b82f6'],
-        ['sakthivel.k@marslab.work', 'sakthivel.k@marslab.work', salesPassword, 'Sakthivel K', 'sales', '#10b981'],
-        ['sameerulrahman.f@marslab.work', 'sameerulrahman.f@marslab.work', adminPassword, 'Sameerul Rahman', 'admin', '#f59e0b']
+        ['ranjithkumar.v@marslab.work', 'ranjithkumar.v@marslab.work', salesPassword, 'Ranjith Kumar', 'user', '#3b82f6', softwareDept.id, categories[0]?.id ?? null],
+        ['sakthivel.k@marslab.work', 'sakthivel.k@marslab.work', salesPassword, 'Sakthivel K', 'user', '#10b981', softwareDept.id, categories[1]?.id ?? categories[0]?.id ?? null],
+        ['sameerulrahman.f@marslab.work', 'sameerulrahman.f@marslab.work', adminPassword, 'Sameerul Rahman', 'super_admin', '#f59e0b', null, null]
       ];
 
       for (const user of users) {
         await db.query(`
-          INSERT INTO users (username, email, password, full_name, role, avatar_color)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO users (username, email, password, full_name, role, avatar_color, department_id, category_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `, user);
       }
 
       console.log('Users seeded successfully!');
       console.log('Login credentials:');
-      console.log('- Sales: ranjithkumar.v@marslab.work / sales123');
-      console.log('- Sales: sakthivel.k@marslab.work / sales123');
-      console.log('- Admin: sameerulrahman.f@marslab.work / admin123');
+      console.log('- User: ranjithkumar.v@marslab.work / sales123');
+      console.log('- User: sakthivel.k@marslab.work / sales123');
+      console.log('- Super Admin: sameerulrahman.f@marslab.work / admin123');
     } else {
       console.log('Database already seeded.');
     }

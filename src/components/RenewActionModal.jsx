@@ -31,7 +31,7 @@ export default function RenewActionModal({ renewal, onClose, onSuccess }) {
   });
 
   const isFinance = user?.role === 'finance';
-  const isSales = user?.role === 'sales';
+  const isSales = user?.role === 'user';
 
   const handleDateChange = (e) => {
     let val = e.target.value;

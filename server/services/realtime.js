@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
+import { isRecordVisibleToUser } from '../utils/scope.js';
 
 // SECURITY: no fallback secret here. The previous hardcoded fallback
 // ('b6e8a49f...') was a real secret committed to source — harmless only
@@ -72,7 +73,17 @@ export const registerClient = async (req, res) => {
     }
   }, 15000);
 
-  const clientObj = { id: Date.now(), res };
+  const clientObj = {
+    id: Date.now(),
+    res,
+    user: {
+      role: decoded.role,
+      departmentId: decoded.departmentId,
+      categoryId: decoded.categoryId,
+      fullName: decoded.fullName,
+      email: decoded.email,
+    },
+  };
   clients.push(clientObj);
 
   console.log(`🔌 Real-Time Client connected. Total active clients: ${clients.length}`);
@@ -85,12 +96,22 @@ export const registerClient = async (req, res) => {
   });
 };
 
+// `data` is only scoping-sensitive when it looks like a renewal row (carries
+// department_id/category_id) — other event shapes (visit tracking, agent job
+// status) pass through unfiltered, same as before.
+const isRenewalShaped = (data) =>
+  data && typeof data === 'object' && ('department_id' in data || 'category_id' in data);
+
 export const broadcastEvent = (type, data) => {
-  const payload = JSON.stringify({ type, data });
   console.log(`📡 Real-Time Broadcasting event: ${type}`);
+  const scoped = isRenewalShaped(data);
+  const fullPayload = JSON.stringify({ type, data });
+  const strippedPayload = JSON.stringify({ type, data: null });
+
   clients.forEach(client => {
     try {
-      client.res.write(`data: ${payload}\n\n`);
+      const visible = !scoped || isRecordVisibleToUser(data, client.user);
+      client.res.write(`data: ${visible ? fullPayload : strippedPayload}\n\n`);
       if (typeof client.res.flush === 'function') client.res.flush();
     } catch (err) {
       console.error('Error writing to client:', err.message);

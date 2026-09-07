@@ -2,36 +2,41 @@ import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { processRenewals } from '../services/scheduler.js';
+import { buildScopeClause, notificationRoleBuckets } from '../utils/scope.js';
 
 const router = Router();
 
 // Dashboard KPIs
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
-    const totalReq = db.query('SELECT COUNT(*) as count FROM renewals WHERE is_deleted = false');
-    const activeReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE status = 'Active' AND is_deleted = false");
-    const pendingReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE status = 'Pending Renewal' AND is_deleted = false");
-    const renewedReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND is_deleted = false");
-    const expiredReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE status = 'Expired' AND is_deleted = false");
-    const revenueReq = db.query('SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE is_deleted = false');
-    const profitReq = db.query("SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status != 'Expired' AND is_deleted = false");
-    const lossReq = db.query("SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status = 'Expired' AND is_deleted = false");
-    
+    const scope = buildScopeClause(req.user, 1);
+    const p = scope.params;
+
+    const totalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE is_deleted = false ${scope.clause}`, p);
+    const activeReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Active' AND is_deleted = false ${scope.clause}`, p);
+    const pendingReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Pending Renewal' AND is_deleted = false ${scope.clause}`, p);
+    const renewedReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND is_deleted = false ${scope.clause}`, p);
+    const expiredReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Expired' AND is_deleted = false ${scope.clause}`, p);
+    const revenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE is_deleted = false ${scope.clause}`, p);
+    const profitReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status != 'Expired' AND is_deleted = false ${scope.clause}`, p);
+    const lossReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status = 'Expired' AND is_deleted = false ${scope.clause}`, p);
+
     // Phase 2 Actionable Metrics
-    const dueTodayReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE renewal_date = CURRENT_DATE AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')");
-    const dueThisWeekReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE renewal_date >= CURRENT_DATE AND renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')");
-    const dueThisMonthReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')");
-    const overdueReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE (renewal_date < CURRENT_DATE OR status = 'Expired') AND is_deleted = false AND status != 'Renewed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')");
-    const pendingClientApprovalReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE (renewal_confirmation = 'pending' OR status = 'Pending Renewal') AND is_deleted = false");
-    const quotesSentReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE (invoice_status = 'Sent' OR (invoice_number IS NOT NULL AND invoice_number != '')) AND is_deleted = false");
-    const revenueThisMonthReq = db.query("SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND (to_char(updated_at, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') OR to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')) AND is_deleted = false");
-    const expectedRevenueReq = db.query("SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false");
-    const pendingFollowupsReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE follow_up_status != 'Completed' AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false");
+    const dueTodayReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date = CURRENT_DATE AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
+    const dueThisWeekReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date >= CURRENT_DATE AND renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
+    const dueThisMonthReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
+    const overdueReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_date < CURRENT_DATE OR status = 'Expired') AND is_deleted = false AND status != 'Renewed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
+    const pendingClientApprovalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_confirmation = 'pending' OR status = 'Pending Renewal') AND is_deleted = false ${scope.clause}`, p);
+    const quotesSentReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (invoice_status = 'Sent' OR (invoice_number IS NOT NULL AND invoice_number != '')) AND is_deleted = false ${scope.clause}`, p);
+    const revenueThisMonthReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND (to_char(updated_at, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') OR to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')) AND is_deleted = false ${scope.clause}`, p);
+    const expectedRevenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${scope.clause}`, p);
+    const pendingFollowupsReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE follow_up_status != 'Completed' AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${scope.clause}`, p);
 
     const today = new Date().toISOString().split('T')[0];
     const d30 = new Date(); d30.setDate(d30.getDate() + 30);
     const d30str = d30.toISOString().split('T')[0];
-    const upcomingReq = db.query("SELECT COUNT(*) as count FROM renewals WHERE renewal_date BETWEEN $1 AND $2 AND status != 'Renewed' AND is_deleted = false", [today, d30str]);
+    const upcomingScope = buildScopeClause(req.user, 3);
+    const upcomingReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date BETWEEN $1 AND $2 AND status != 'Renewed' AND is_deleted = false ${upcomingScope.clause}`, [today, d30str, ...upcomingScope.params]);
 
     const [
       totalRes, activeRes, pendingRes, renewedRes, expiredRes, revenueRes, profitRes, lossRes,
@@ -58,7 +63,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
       profit: parseFloat(profitRes.rows[0].total),
       loss: parseFloat(lossRes.rows[0].total),
       upcoming: parseInt(upcomingRes.rows[0].count),
-      
+
       // Phase 2 Actionable Metrics
       dueToday: parseInt(dueTodayRes.rows[0].count),
       dueThisWeek: parseInt(dueThisWeekRes.rows[0].count),
@@ -77,23 +82,48 @@ router.get('/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// Department-level split (super_admin only — the one place cross-department
+// aggregation is allowed, since dept_admin/user must never see other
+// departments' numbers even in aggregate).
+router.get('/stats/by-department', authenticateToken, requireRole('super_admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT d.id as department_id, d.name as department_name,
+        COUNT(r.id)::int as total,
+        COALESCE(SUM(r.value), 0)::float as revenue,
+        COALESCE(SUM(r.profit), 0)::float as profit
+      FROM departments d
+      LEFT JOIN renewals r ON r.department_id = d.id AND r.is_deleted = false
+      WHERE d.is_active = true
+      GROUP BY d.id, d.name
+      ORDER BY d.name ASC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('Department stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch department stats.' });
+  }
+});
+
 // Actionable items requiring priority attention
 router.get('/actionable-items', authenticateToken, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
+    const scope = buildScopeClause(req.user, 2, 'r');
     const { rows } = await db.query(`
       SELECT r.id, r.unique_id, r.client_name, r.service, r.renewal_date, r.value, r.status, r.follow_up_status, r.invoice_status, r.renewal_confirmation, r.owner
       FROM renewals r
-      WHERE r.is_deleted = false 
+      WHERE r.is_deleted = false
         AND (
-          r.renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date 
+          r.renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date
           OR r.status = 'Expired'
           OR r.follow_up_status != 'Completed'
           OR r.renewal_confirmation = 'pending'
         )
         AND (r.renewal_confirmation IS NULL OR r.renewal_confirmation != 'renewed')
-      ORDER BY 
-        CASE 
+        ${scope.clause}
+      ORDER BY
+        CASE
           WHEN r.renewal_date = CURRENT_DATE THEN 1
           WHEN r.renewal_date < CURRENT_DATE THEN 2
           WHEN r.renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date THEN 3
@@ -101,7 +131,7 @@ router.get('/actionable-items', authenticateToken, async (req, res) => {
         END,
         r.renewal_date ASC
       LIMIT $1
-    `, [parseInt(limit)]);
+    `, [parseInt(limit), ...scope.params]);
     res.json(rows);
   } catch (err) {
     console.error('Actionable items error:', err);
@@ -109,15 +139,22 @@ router.get('/actionable-items', authenticateToken, async (req, res) => {
   }
 });
 
-// Activity logs (Admin only)
-router.get('/activity-logs', authenticateToken, requireRole('admin'), async (req, res) => {
+// Activity logs (Admin only) — dept_admin only sees activity from their own department's users
+router.get('/activity-logs', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { limit = 50 } = req.query;
+    const params = [parseInt(limit)];
+    let deptClause = '';
+    if (req.user.role === 'dept_admin') {
+      deptClause = ' WHERE u.department_id = $2';
+      params.push(req.user.departmentId);
+    }
     const { rows } = await db.query(`
       SELECT al.*, u.full_name, u.role FROM activity_logs al
       LEFT JOIN users u ON al.user_id = u.id
+      ${deptClause}
       ORDER BY al.created_at DESC LIMIT $1
-    `, [parseInt(limit)]);
+    `, params);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch activity logs.' });
@@ -125,11 +162,11 @@ router.get('/activity-logs', authenticateToken, requireRole('admin'), async (req
 });
 
 // Email logs (Admin only)
-router.get('/email-logs', authenticateToken, requireRole('admin'), async (req, res) => {
+router.get('/email-logs', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   try {
     const { limit = 1000, month, date, search } = req.query;
     let query = `
-      SELECT 
+      SELECT
         el.id,
         el.renewal_id,
         el.recipient_email,
@@ -147,6 +184,11 @@ router.get('/email-logs', authenticateToken, requireRole('admin'), async (req, r
       WHERE 1=1
     `;
     const params = [];
+
+    if (req.user.role === 'dept_admin') {
+      params.push(req.user.departmentId);
+      query += ` AND r.department_id = $${params.length}`;
+    }
 
     if (month) {
       params.push(month);
@@ -182,47 +224,50 @@ router.get('/email-logs', authenticateToken, requireRole('admin'), async (req, r
 // Notification Center Actionable Categories
 router.get('/notification-center', authenticateToken, async (req, res) => {
   try {
+    const scope = buildScopeClause(req.user, 1);
+    const p = scope.params;
+
     const dueTodayReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'due_today' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_date = CURRENT_DATE AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')
+      WHERE is_deleted = false AND renewal_date = CURRENT_DATE AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
       ORDER BY value DESC
-    `);
+    `, p);
 
     const overdueReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'overdue' as category
       FROM renewals
-      WHERE is_deleted = false AND (renewal_date < CURRENT_DATE OR status = 'Expired') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')
+      WHERE is_deleted = false AND (renewal_date < CURRENT_DATE OR status = 'Expired') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
       ORDER BY renewal_date ASC
-    `);
+    `, p);
 
     const followupsDueTodayReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'followup_today' as category
       FROM renewals
-      WHERE is_deleted = false AND follow_up_status != 'Completed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed')
+      WHERE is_deleted = false AND follow_up_status != 'Completed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
       ORDER BY renewal_date ASC
-    `);
+    `, p);
 
     const clientResponseReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, renewal_confirmation, 'client_response' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_confirmation IN ('awaiting_client_approval', 'reminder_sent', 'quote_sent')
+      WHERE is_deleted = false AND renewal_confirmation IN ('awaiting_client_approval', 'reminder_sent', 'quote_sent') ${scope.clause}
       ORDER BY updated_at DESC
-    `);
+    `, p);
 
     const quotePendingReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'quote_pending' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_confirmation IN ('quote_sent', 'awaiting_client_approval')
+      WHERE is_deleted = false AND renewal_confirmation IN ('quote_sent', 'awaiting_client_approval') ${scope.clause}
       ORDER BY renewal_date ASC
-    `);
+    `, p);
 
     const paymentPendingReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'payment_pending' as category
       FROM renewals
-      WHERE is_deleted = false AND invoice_status = 'Sent' AND (payment_status = 'No' OR payment_status IS NULL)
+      WHERE is_deleted = false AND invoice_status = 'Sent' AND (payment_status = 'No' OR payment_status IS NULL) ${scope.clause}
       ORDER BY value DESC
-    `);
+    `, p);
 
     const [dueToday, overdue, followupsDueToday, clientResponse, quotePending, paymentPending] = await Promise.all([
       dueTodayReq, overdueReq, followupsDueTodayReq, clientResponseReq, quotePendingReq, paymentPendingReq
@@ -255,17 +300,18 @@ router.get('/notification-center', authenticateToken, async (req, res) => {
 // Notifications
 router.get('/notifications', authenticateToken, async (req, res) => {
   try {
+    const buckets = notificationRoleBuckets(req.user.role);
     const { rows: notifications } = await db.query(`
       SELECT * FROM notifications
-      WHERE (user_id = $1 OR role = $2 OR role IS NULL)
+      WHERE (user_id = $1 OR role = ANY($2) OR role IS NULL)
       ORDER BY created_at DESC LIMIT 50
-    `, [req.user.id, req.user.role]);
-    
+    `, [req.user.id, buckets]);
+
     const { rows } = await db.query(`
       SELECT COUNT(*) as count FROM notifications
-      WHERE (user_id = $1 OR role = $2 OR role IS NULL) AND read = 0
-    `, [req.user.id, req.user.role]);
-    
+      WHERE (user_id = $1 OR role = ANY($2) OR role IS NULL) AND read = 0
+    `, [req.user.id, buckets]);
+
     res.json({ notifications, unread: parseInt(rows[0].count) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch notifications.' });
@@ -275,9 +321,10 @@ router.get('/notifications', authenticateToken, async (req, res) => {
 // Mark notification read (only the owning user or matching role or system-wide notification can mark it)
 router.put('/notifications/:id/read', authenticateToken, async (req, res) => {
   try {
+    const buckets = notificationRoleBuckets(req.user.role);
     await db.query(
-      'UPDATE notifications SET read = 1 WHERE id = $1 AND (user_id = $2 OR role = $3 OR role IS NULL OR user_id IS NULL)',
-      [req.params.id, req.user.id, req.user.role]
+      'UPDATE notifications SET read = 1 WHERE id = $1 AND (user_id = $2 OR role = ANY($3) OR role IS NULL OR user_id IS NULL)',
+      [req.params.id, req.user.id, buckets]
     );
     res.json({ success: true });
   } catch(err) {
@@ -288,7 +335,8 @@ router.put('/notifications/:id/read', authenticateToken, async (req, res) => {
 // Mark all read
 router.put('/notifications/read-all', authenticateToken, async (req, res) => {
   try {
-    await db.query('UPDATE notifications SET read = 1 WHERE (user_id = $1 OR role = $2 OR role IS NULL OR user_id IS NULL)', [req.user.id, req.user.role]);
+    const buckets = notificationRoleBuckets(req.user.role);
+    await db.query('UPDATE notifications SET read = 1 WHERE (user_id = $1 OR role = ANY($2) OR role IS NULL OR user_id IS NULL)', [req.user.id, buckets]);
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: 'Server error' });
@@ -296,7 +344,7 @@ router.put('/notifications/read-all', authenticateToken, async (req, res) => {
 });
 
 // Trigger scheduler manually (admin only)
-router.post('/trigger-scheduler', authenticateToken, requireRole('admin'), (req, res) => {
+router.post('/trigger-scheduler', authenticateToken, requireRole('super_admin', 'dept_admin'), (req, res) => {
   processRenewals();
   res.json({ message: 'Scheduler triggered.' });
 });
@@ -304,7 +352,8 @@ router.post('/trigger-scheduler', authenticateToken, requireRole('admin'), (req,
 // Status distribution for charts
 router.get('/charts/status', authenticateToken, async (req, res) => {
   try {
-    const { rows } = await db.query("SELECT status, COUNT(*) as count FROM renewals WHERE is_deleted = false GROUP BY status");
+    const scope = buildScopeClause(req.user, 1);
+    const { rows } = await db.query(`SELECT status, COUNT(*) as count FROM renewals WHERE is_deleted = false ${scope.clause} GROUP BY status`, scope.params);
     // Ensure count is parsed if pg returns strings for bigints
     res.json(rows.map(r => ({ status: r.status, count: parseInt(r.count) })));
   } catch (err) {
@@ -315,20 +364,21 @@ router.get('/charts/status', authenticateToken, async (req, res) => {
 // Services & Sub-Products distribution for nested pie charts
 router.get('/charts/services', authenticateToken, async (req, res) => {
   try {
+    const scope = buildScopeClause(req.user, 1);
     const { rows } = await db.query(`
       SELECT service, COUNT(*)::int as count, COALESCE(SUM(value), 0)::float as revenue
-      FROM renewals 
-      WHERE is_deleted = false AND service IS NOT NULL AND service != ''
+      FROM renewals
+      WHERE is_deleted = false AND service IS NOT NULL AND service != '' ${scope.clause}
       GROUP BY service
       ORDER BY count DESC
-    `);
-    
+    `, scope.params);
+
     const { rows: allRecords } = await db.query(`
       SELECT id, unique_id, service, client_name, value, status, renewal_date AS expiry_date, renewal_date, vendor, purchase_cost, profit, owner, client_email, sales_email, contact_number, invoice_number, quotation_number, reference_id, plan_period, payment_status, edit_status, expiry_reason
       FROM renewals
-      WHERE is_deleted = false AND service IS NOT NULL AND service != ''
+      WHERE is_deleted = false AND service IS NOT NULL AND service != '' ${scope.clause}
       ORDER BY renewal_date ASC
-    `);
+    `, scope.params);
 
     res.json({
       summary: rows,
@@ -343,6 +393,7 @@ router.get('/charts/services', authenticateToken, async (req, res) => {
 // Monthly renewals for charts (Past & Current Actual Client Data)
 router.get('/charts/monthly', authenticateToken, async (req, res) => {
   try {
+    const scope = buildScopeClause(req.user, 1);
     const { rows } = await db.query(`
       SELECT
         to_char(renewal_date, 'YYYY-MM') as month,
@@ -357,10 +408,11 @@ router.get('/charts/monthly', authenticateToken, async (req, res) => {
       WHERE is_deleted = false
         AND renewal_date IS NOT NULL
         AND renewal_date <= (CURRENT_DATE + INTERVAL '12 months')::date
+        ${scope.clause}
       GROUP BY month
       ORDER BY month ASC
       LIMIT 16
-    `);
+    `, scope.params);
     res.json(rows.map(r => ({
       month: r.month,
       count: parseInt(r.count),

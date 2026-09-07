@@ -90,6 +90,8 @@ export default function Reports() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [emailLogs, setEmailLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [matrixMode, setMatrixMode] = useState('value'); // 'value' | 'count'
+  const [selectedQuarterIdx, setSelectedQuarterIdx] = useState(null); // null = show all months
 
   // Search & Filter states for Admin Telemetry
   const [emailLogSearch, setEmailLogSearch] = useState('');
@@ -143,7 +145,7 @@ export default function Reports() {
         fetch('/api/dashboard/charts/services', { headers: { 'Authorization': `Bearer ${token}` } })
       ];
 
-      const isAdmin = user?.role === 'admin';
+      const isAdmin = (user?.role === 'super_admin' || user?.role === 'dept_admin');
       if (isAdmin) {
         promises.push(fetch('/api/dashboard/activity-logs?limit=50', { headers: { 'Authorization': `Bearer ${token}` } }));
         promises.push(fetch('/api/dashboard/email-logs?limit=50', { headers: { 'Authorization': `Bearer ${token}` } }));
@@ -204,7 +206,8 @@ export default function Reports() {
         (log.full_name && log.full_name.toLowerCase().includes(q)) ||
         (log.role && log.role.toLowerCase().includes(q));
 
-      const matchRole = auditLogRoleFilter === 'All' || log.role === auditLogRoleFilter;
+      const matchRole = auditLogRoleFilter === 'All'
+        || (auditLogRoleFilter === 'admin' ? (log.role === 'super_admin' || log.role === 'dept_admin') : log.role === auditLogRoleFilter);
 
       return matchSearch && matchRole;
     });
@@ -394,6 +397,62 @@ export default function Reports() {
     });
   }, [selectedMonthDrilldown, serviceRecords]);
 
+  // Service x Month matrix for the Analytics section — aggregates the same
+  // per-record data already fetched for the service pie chart (serviceRecords)
+  // over the same month range the revenue/profit chart uses, so no extra
+  // backend call or department join is required.
+  const serviceMonthMatrix = useMemo(() => {
+    if (!serviceRecords || serviceRecords.length === 0 || !monthlyAnalysis) return null;
+
+    const months = monthlyAnalysis.enriched.map(m => m.month);
+    const byService = {};
+
+    serviceRecords.forEach(r => {
+      const svc = r.service || 'Unspecified';
+      const rawDate = r.renewal_date || r.expiry_date;
+      if (!rawDate) return;
+      const dStr = typeof rawDate === 'string' ? rawDate : new Date(rawDate).toISOString();
+      const monthKey = dStr.slice(0, 7);
+      if (!months.includes(monthKey)) return;
+
+      if (!byService[svc]) byService[svc] = { service: svc, totalValue: 0, totalCount: 0, cells: {} };
+      if (!byService[svc].cells[monthKey]) byService[svc].cells[monthKey] = { value: 0, count: 0 };
+      const val = parseFloat(r.value) || 0;
+      byService[svc].cells[monthKey].value += val;
+      byService[svc].cells[monthKey].count += 1;
+      byService[svc].totalValue += val;
+      byService[svc].totalCount += 1;
+    });
+
+    const services = Object.values(byService)
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 8);
+
+    const maxValue = Math.max(1, ...services.flatMap(s => months.map(m => s.cells[m]?.value || 0)));
+    const maxCount = Math.max(1, ...services.flatMap(s => months.map(m => s.cells[m]?.count || 0)));
+
+    return { months, services, maxValue, maxCount };
+  }, [serviceRecords, monthlyAnalysis]);
+
+  const formatMonthLabel = (m) => {
+    const d = new Date(`${m}-01`);
+    return isNaN(d) ? m : d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  };
+
+  // Fixed calendar quarters (Q1 = Jan-Mar ... Q4 = Oct-Dec) of the current
+  // year, so the Q1-Q4 tabs are always present regardless of how many months
+  // of data happen to be loaded. Columns just render "–" for a quarter's
+  // months that aren't in serviceMonthMatrix.months.
+  const currentYear = new Date().getFullYear();
+  const calendarQuarters = [0, 1, 2, 3].map((q) => {
+    const monthNums = [q * 3 + 1, q * 3 + 2, q * 3 + 3];
+    return monthNums.map((n) => `${currentYear}-${String(n).padStart(2, '0')}`);
+  });
+
+  const visibleMatrixMonths = selectedQuarterIdx === null
+    ? serviceMonthMatrix?.months || []
+    : calendarQuarters[selectedQuarterIdx];
+
   const openModal = (type) => {
     setModalSearchTerm('');
     setModalCategoryFilter([]);
@@ -565,8 +624,109 @@ export default function Reports() {
         />
       </div>
 
+      {/* Service x Month matrix */}
+      {serviceMonthMatrix && serviceMonthMatrix.services.length > 0 && (
+        <div className="card p-6">
+          <div className="flex flex-col gap-3 mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black text-black dark:text-white">Service &times; Month matrix</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Top services by renewal {matrixMode === 'value' ? 'value' : 'count'}
+                  {selectedQuarterIdx === null
+                    ? `, tracked across the same ${serviceMonthMatrix.months.length}-month window as the charts above`
+                    : `, for Q${selectedQuarterIdx + 1} (${visibleMatrixMonths.map(formatMonthLabel).join(' – ')})`}
+                </p>
+              </div>
+              <div className="flex items-center p-1 bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl w-fit">
+                <button
+                  onClick={() => setMatrixMode('value')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    matrixMode === 'value' ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  By value
+                </button>
+                <button
+                  onClick={() => setMatrixMode('count')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    matrixMode === 'count' ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  By count
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center p-1 bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl w-fit">
+              <button
+                onClick={() => setSelectedQuarterIdx(null)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  selectedQuarterIdx === null ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                All
+              </button>
+              {[0, 1, 2, 3].map((idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedQuarterIdx(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedQuarterIdx === idx ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Q{idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200/60 dark:border-white/10">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-black bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md">
+                  <th className="py-2.5 px-4 text-left sticky left-0 bg-slate-100/90 dark:bg-slate-900/90 backdrop-blur-md z-10">Service</th>
+                  {visibleMatrixMonths.map(m => (
+                    <th key={m} className="py-2.5 px-3 text-center whitespace-nowrap">{formatMonthLabel(m)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/40 dark:divide-white/5">
+                {serviceMonthMatrix.services.map(s => (
+                  <tr key={s.service} className="hover:bg-slate-50/60 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-2 px-4 font-semibold text-slate-900 dark:text-white truncate max-w-[160px] sticky left-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md z-10">
+                      {s.service}
+                    </td>
+                    {visibleMatrixMonths.map(m => {
+                      const cell = s.cells[m];
+                      const raw = matrixMode === 'value' ? (cell?.value || 0) : (cell?.count || 0);
+                      const max = matrixMode === 'value' ? serviceMonthMatrix.maxValue : serviceMonthMatrix.maxCount;
+                      const intensity = raw > 0 ? Math.min(1, raw / max) : 0;
+                      return (
+                        <td
+                          key={m}
+                          onClick={() => cell && setSelectedMonthDrilldown(m)}
+                          className={`py-2 px-3 text-center font-mono font-medium whitespace-nowrap ${cell ? 'cursor-pointer' : ''}`}
+                          style={{
+                            backgroundColor: intensity > 0 ? `rgba(var(--brand-rgb), ${0.08 + intensity * 0.42})` : 'transparent',
+                            color: intensity > 0.55 ? '#fff' : undefined
+                          }}
+                          title={cell ? `${s.service} · ${formatMonthLabel(m)}` : undefined}
+                        >
+                          {raw > 0 ? (matrixMode === 'value' ? formatCompactCurrency(raw) : raw) : '–'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ADMIN EXCLUSIVE: Email Logs & Audit Logs Section */}
-      {user?.role === 'admin' && (
+      {(user?.role === 'super_admin' || user?.role === 'dept_admin') && (
         <div className="space-y-6 pt-6 border-t border-slate-200/50 dark:border-white/10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -799,7 +959,7 @@ export default function Reports() {
                     </thead>
                     <tbody className="divide-y divide-slate-200/40 dark:divide-white/5 text-slate-700 dark:text-slate-200">
                       {filteredAuditLogs.map((log) => {
-                        const isAdmin = log.role === 'admin';
+                        const isAdmin = log.role === 'super_admin' || log.role === 'dept_admin';
                         return (
                           <tr key={log.id} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
                             <td className="px-3.5 py-3 whitespace-nowrap text-slate-500 dark:text-slate-400 text-[11px] font-mono">

@@ -163,7 +163,7 @@ export default function EditsHistory() {
       const uniqueId = getUniqueId(log);
       const changes = getChanges(log);
       const reason = getReason(log);
-      const actorRole = log.performed_by_role === 'sales' ? 'CST / Sales' : log.performed_by_role;
+      const actorRole = (log.performed_by_role === 'sales' || log.performed_by_role === 'user') ? 'CST / Sales' : log.performed_by_role;
 
       const doc = new jsPDF();
 
@@ -470,12 +470,12 @@ export default function EditsHistory() {
                             <p className="text-xs font-semibold text-surface-900 dark:text-white">{log.performed_by_name}</p>
                             <span 
                               className={`inline-block text-[9px] px-1.5 py-0.2 rounded font-medium border mt-0.5 capitalize ${
-                                log.performed_by_role === 'admin' 
-                                  ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' 
+                                (log.performed_by_role === 'admin' || log.performed_by_role === 'super_admin' || log.performed_by_role === 'dept_admin')
+                                  ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
                                   : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800'
                               }`}
                             >
-                              {log.performed_by_role === 'sales' ? 'CST / Sales' : log.performed_by_role}
+                              {(log.performed_by_role === 'sales' || log.performed_by_role === 'user') ? 'CST / Sales' : log.performed_by_role}
                             </span>
                           </div>
                         </div>
@@ -583,7 +583,7 @@ export default function EditsHistory() {
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-surface-900 dark:text-white">{selectedLog.performed_by_name}</p>
-                      <p className="text-[10px] text-surface-400 capitalize">{selectedLog.performed_by_role === 'sales' ? 'Customer Success Team / Sales' : selectedLog.performed_by_role + ' Team'}</p>
+                      <p className="text-[10px] text-surface-400 capitalize">{(selectedLog.performed_by_role === 'sales' || selectedLog.performed_by_role === 'user') ? 'Customer Success Team / Sales' : selectedLog.performed_by_role + ' Team'}</p>
                     </div>
                   </div>
                 </div>

@@ -42,7 +42,8 @@ export default function ActivityLogs() {
   }, [token]);
 
   const filteredLogs = logs.filter(log => {
-    const matchRole = roleFilter === 'all' || log.role === roleFilter;
+    const matchRole = roleFilter === 'all'
+      || (roleFilter === 'admin' ? (log.role === 'super_admin' || log.role === 'dept_admin') : log.role === roleFilter);
     if (!searchQuery) return matchRole;
     const query = searchQuery.toLowerCase();
     const matchSearch = (
@@ -118,7 +119,7 @@ export default function ActivityLogs() {
           {[
             { id: 'all', label: 'All Roles' },
             { id: 'admin', label: 'Admins Only' },
-            { id: 'sales', label: 'Sales / CST' }
+            { id: 'user', label: 'Sales / CST' }
           ].map(tab => (
             <button
               key={tab.id}

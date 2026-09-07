@@ -1,5 +1,6 @@
 import db from '../db.js';
 import { extractFieldEdits } from './geminiClient.js';
+import { isRecordVisibleToUser } from '../utils/scope.js';
 
 // Field allow-list for natural language editing
 export const EDITABLE_FIELDS_ALLOWLIST = new Set([
@@ -65,9 +66,11 @@ export async function parseNaturalLanguageMutation(utterance, requestingUser) {
     return result;
   }
 
-  // Role Scoping: Sales user can only edit their own records
-  if (requestingUser?.role === 'sales' && renewalRecord.owner !== requestingUser.full_name && renewalRecord.sales_email !== requestingUser.email) {
-    result.error = 'Access denied: You can only edit renewal records assigned to your sales account.';
+  // Role scoping: dept_admin restricted to their department, user restricted
+  // to their category AND their own assigned records — same rule as the
+  // REST routes (server/utils/scope.js).
+  if (!isRecordVisibleToUser(renewalRecord, requestingUser)) {
+    result.error = 'Access denied: You do not have access to this renewal record.';
     return result;
   }
 

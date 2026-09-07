@@ -410,7 +410,7 @@
 
   /* ── Polished Sidebar ──────────────────────────────────────── */
   .sidebar-nav-item {
-    @apply relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm cursor-pointer select-none;
+    @apply relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs cursor-pointer select-none;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .sidebar-nav-active {
@@ -439,7 +439,7 @@
 
   /* Nav icon container */
   .sidebar-nav-icon {
-    @apply flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0;
+    @apply flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0;
     transition: all 0.2s ease;
     color: #78716c;
   }
@@ -489,7 +489,7 @@
 
   /* Sidebar footer */
   .sidebar-footer {
-    @apply px-5 py-3.5;
+    @apply px-4 py-2;
     border-top: 1px solid var(--sidebar-border);
     background: linear-gradient(to top, rgba(0,0,0,0.02), transparent);
   }
@@ -499,25 +499,19 @@
 
   /* Version badge */
   .sidebar-version-badge {
-    @apply px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide;
+    @apply px-2 py-0.5 rounded-md text-[9.5px] font-bold tracking-wide;
     background: rgba(var(--brand-rgb), 0.1);
     color: rgb(var(--brand-rgb));
     border: 1px solid rgba(var(--brand-rgb), 0.18);
   }
 
-  /* Sidebar scrollbar */
+  /* Sidebar scrollbar - zero visual clutter */
+  .sidebar-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
   .sidebar-scroll::-webkit-scrollbar {
-    width: 3px;
-  }
-  .sidebar-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .sidebar-scroll::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 99px;
-  }
-  .dark .sidebar-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    display: none;
   }
 
   /* ── Agent Drawer ──────────────────────────────────────────── */

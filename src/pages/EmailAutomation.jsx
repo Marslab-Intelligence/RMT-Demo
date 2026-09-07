@@ -326,7 +326,7 @@ export default function EmailAutomation() {
           </div>
 
           {/* Start/Stop Buttons */}
-          {user?.role === 'admin' && (
+          {(user?.role === 'super_admin' || user?.role === 'dept_admin') && (
             <div className="flex items-center gap-2 border-l border-surface-200 dark:border-surface-700/60 pl-4 ml-1">
               <button
                 onClick={() => handleToggleClick('start')}

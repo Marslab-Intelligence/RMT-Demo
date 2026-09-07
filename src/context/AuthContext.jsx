@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -143,8 +143,20 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  // PERF: this object literal used to be re-created on every AuthProvider
+  // render — since every consumer across the whole app calls useAuth(), a
+  // provider re-render (which happens on every silent token refresh, roughly
+  // every 13-58 min depending on JWT TTL) meant every consuming page/component
+  // re-rendered too, regardless of whether the values they actually use
+  // changed. Memoizing means consumers only re-render when user/token/loading
+  // truly change.
+  const value = useMemo(
+    () => ({ user, token, loading, login, logout, getValidToken }),
+    [user, token, loading, login, logout, getValidToken]
+  );
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, getValidToken }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

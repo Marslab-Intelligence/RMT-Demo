@@ -42,9 +42,15 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET;
 // hardcodes NODE_ENV=production unconditionally — including for local/sandbox
 // runs — so checking it would disable demo mode for every legitimate local
 // use, not just real production. FRONTEND_URL is the reliable signal instead:
-// the real deployment always hardcodes it to the production domain in
-// k3s/app-deployment.yaml, while every local/sandbox .env points elsewhere.
-const PRODUCTION_FRONTEND_URL = 'https://rmt.marslabintel.com';
+// the real deployment always sets it to the production hostname (previously
+// hardcoded here to the AWS-era domain, k3s/app-deployment.yaml; now driven
+// by an explicit PRODUCTION_FRONTEND_URL env var so it survives moving
+// hostnames — e.g. the on-prem migration's charts/rmt sets both FRONTEND_URL
+// and PRODUCTION_FRONTEND_URL to the same on-prem hostname, keeping this
+// check meaningful instead of silently becoming a no-op against a domain
+// that no longer matches anything), while every local/sandbox .env leaves
+// PRODUCTION_FRONTEND_URL unset (or pointing elsewhere) and so never matches.
+const PRODUCTION_FRONTEND_URL = process.env.PRODUCTION_FRONTEND_URL || 'https://rmt.marslabintel.com';
 const DEMO_MODE = process.env.DEMO_MODE === 'true' && process.env.FRONTEND_URL !== PRODUCTION_FRONTEND_URL;
 
 // ==========================================
@@ -97,6 +103,20 @@ function setRefreshCookie(res, refreshToken) {
 // STANDARD USERNAME / PASSWORD LOGIN
 // ==========================================
 
+// Looks up the human-readable department/category names for a user's scope
+// claims — used only for display (the "Viewing: Software → AWS" badge), the
+// JWT/req.user still carries the ids, never these names, for scoping checks.
+async function fetchScopeNames(departmentId, categoryId) {
+  const [deptRes, catRes] = await Promise.all([
+    departmentId ? db.query('SELECT name FROM departments WHERE id = $1', [departmentId]) : Promise.resolve({ rows: [] }),
+    categoryId ? db.query('SELECT name FROM categories WHERE id = $1', [categoryId]) : Promise.resolve({ rows: [] }),
+  ]);
+  return {
+    departmentName: deptRes.rows[0]?.name ?? null,
+    categoryName: catRes.rows[0]?.name ?? null,
+  };
+}
+
 function issueSession(user) {
   return jwt.sign(
     {
@@ -105,6 +125,15 @@ function issueSession(user) {
       role: user.role,
       fullName: user.full_name,
       email: user.email,
+      // RBAC v2: null for super_admin, department_id set for dept_admin,
+      // both set for user. Carried in the JWT so every request has scope
+      // without a DB round-trip; re-derived fresh from the DB on every
+      // /refresh below (not copied from the old token) so a department/
+      // category reassignment takes effect on next silent refresh rather
+      // than requiring a full re-login — same bounded-staleness tradeoff
+      // this app already accepts for role changes.
+      departmentId: user.department_id ?? null,
+      categoryId: user.category_id ?? null,
     },
     JWT_SECRET,
     { expiresIn: '8h' }
@@ -146,6 +175,7 @@ router.post('/login', async (req, res) => {
 
     setRefreshCookie(res, refreshToken);
 
+    const scopeNames = await fetchScopeNames(user.department_id, user.category_id);
     res.json({
       token: accessToken,
       user: {
@@ -154,6 +184,10 @@ router.post('/login', async (req, res) => {
         fullName: user.full_name,
         email: user.email,
         role: user.role,
+        departmentId: user.department_id ?? null,
+        categoryId: user.category_id ?? null,
+        departmentName: scopeNames.departmentName,
+        categoryName: scopeNames.categoryName,
         avatarColor: user.avatar_color,
       },
     });
@@ -177,7 +211,13 @@ if (DEMO_MODE) {
   router.get('/demo/users', async (req, res) => {
     try {
       const { rows } = await db.query(
-        `SELECT id, full_name, email, role, avatar_color FROM users WHERE is_active = TRUE ORDER BY role, full_name`
+        `SELECT u.id, u.full_name, u.email, u.role, u.avatar_color,
+                d.name as department_name, c.name as category_name
+         FROM users u
+         LEFT JOIN departments d ON u.department_id = d.id
+         LEFT JOIN categories c ON u.category_id = c.id
+         WHERE u.is_active = TRUE
+         ORDER BY u.role, u.full_name`
       );
       res.json(rows);
     } catch (err) {
@@ -206,6 +246,7 @@ if (DEMO_MODE) {
 
       setRefreshCookie(res, refreshToken);
 
+      const scopeNames = await fetchScopeNames(user.department_id, user.category_id);
       res.json({
         token: accessToken,
         user: {
@@ -214,6 +255,10 @@ if (DEMO_MODE) {
           fullName: user.full_name,
           email: user.email,
           role: user.role,
+          departmentId: user.department_id ?? null,
+          categoryId: user.category_id ?? null,
+          departmentName: scopeNames.departmentName,
+          categoryName: scopeNames.categoryName,
           avatarColor: user.avatar_color,
         },
       });
@@ -280,6 +325,8 @@ router.post('/refresh', async (req, res) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        departmentId: user.department_id ?? null,
+        categoryId: user.category_id ?? null,
         fullName: user.full_name,
         email: user.email,
       },
@@ -293,6 +340,7 @@ router.post('/refresh', async (req, res) => {
 
     console.log(`🔄 Token refreshed for user: ${user.email}`);
 
+    const scopeNames = await fetchScopeNames(user.department_id, user.category_id);
     return res.json({
       token: newAccessToken,
       user: {
@@ -301,6 +349,10 @@ router.post('/refresh', async (req, res) => {
         fullName: user.full_name,
         email: user.email,
         role: user.role,
+        departmentId: user.department_id ?? null,
+        categoryId: user.category_id ?? null,
+        departmentName: scopeNames.departmentName,
+        categoryName: scopeNames.categoryName,
         avatarColor: user.avatar_color,
       },
     });
@@ -343,15 +395,20 @@ router.post('/logout', async (req, res) => {
 // Get current user
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, username, email, full_name, role, avatar_color FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT id, username, email, full_name, role, avatar_color, department_id, category_id FROM users WHERE id = $1', [req.user.id]);
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'User not found.' });
+    const scopeNames = await fetchScopeNames(user.department_id, user.category_id);
     res.json({
       id: user.id,
       username: user.username,
       fullName: user.full_name,
       email: user.email,
       role: user.role,
+      departmentId: user.department_id ?? null,
+      categoryId: user.category_id ?? null,
+      departmentName: scopeNames.departmentName,
+      categoryName: scopeNames.categoryName,
       avatarColor: user.avatar_color,
     });
   } catch(err) {
