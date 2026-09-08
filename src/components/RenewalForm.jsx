@@ -1,34 +1,43 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Lock, Save, Edit3, Calendar } from 'lucide-react';
+import { X, Lock, Save, Edit3, Calendar, Building2, Loader2, Tag } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import GlassSelect from './GlassSelect';
 import GlassDatePicker from './GlassDatePicker';
 
-const PREDEFINED_SERVICES = [
-  "AWS",
-  "AMC",
-  "BDR Suite",
-  "Domain",
-  "Firewall",
-  "GWS",
-  "LSH",
-  "M365",
-  "Plesk",
-  "Seqrite",
-  "Storage",
-  "SSL",
-  "Tally",
-  "Untangle",
-  "Zoho"
-];
-
 const SUB_SERVICES = {};
 
-export default function RenewalForm({ onClose, onSuccess, editData = null }) {
+export default function RenewalForm({ 
+  onClose, 
+  onSuccess, 
+  editData = null, 
+  initialDepartmentId = null, 
+  initialCategoryId = null 
+}) {
   const { token, user } = useAuth();
-  const isAdmin = (user?.role === 'super_admin' || user?.role === 'dept_admin');
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isDeptAdmin = user?.role === 'dept_admin';
+  const isUser = user?.role === 'user';
+  const isAdmin = isSuperAdmin || isDeptAdmin;
+
+  const defaultDeptId = editData?.department_id 
+    ? String(editData.department_id) 
+    : (initialDepartmentId 
+        ? String(initialDepartmentId) 
+        : (!isSuperAdmin && user?.departmentId ? String(user.departmentId) : ''));
+
+  const defaultCatId = editData?.category_id 
+    ? String(editData.category_id) 
+    : (initialCategoryId 
+        ? String(initialCategoryId) 
+        : (isUser && user?.categoryId ? String(user.categoryId) : ''));
+
+  const [departments, setDepartments] = useState([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [services, setServices] = useState([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const datePickerRef = useRef(null);
@@ -69,10 +78,11 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
   const [selectedMainService, setSelectedMainService] = useState(initialService.main);
   const [selectedSubServices, setSelectedSubServices] = useState(initialService.subs);
 
-
   const [formData, setFormData] = useState({
     client_name: editData?.client_name || '',
-    service: editData?.service || '',
+    service: editData?.service || (isUser && user?.categoryName ? user.categoryName : ''),
+    department_id: defaultDeptId,
+    category_id: defaultCatId,
     renewal_date: editData?.renewal_date ? formatDateForInput(editData.renewal_date) : '',
     value: editData?.value || '',
     owner: editData?.owner || '',
@@ -98,6 +108,114 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
     entity: editData?.entity || '',
     reason: ''
   });
+
+  // Fetch departments list
+  useEffect(() => {
+    if (!token) return;
+    let isMounted = true;
+    setDepartmentsLoading(true);
+    fetch('/api/departments', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (isMounted) setDepartments(data.filter(d => d.is_active));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setDepartmentsLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, [token]);
+
+  // Fetch services whenever department_id changes
+  useEffect(() => {
+    if (!token || !formData.department_id) {
+      setServices([]);
+      return;
+    }
+    let isMounted = true;
+    setServicesLoading(true);
+    fetch(`/api/departments/${formData.department_id}/services`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (!isMounted) return;
+        const activeServices = data.filter(s => s.is_active);
+        setServices(activeServices);
+
+        // Auto-match category_id or service name if already present
+        if (formData.category_id) {
+          const matched = activeServices.find(s => String(s.id) === String(formData.category_id));
+          if (matched) {
+            setSelectedMainService(matched.name);
+          }
+        } else if (formData.service) {
+          const matched = activeServices.find(s => s.name.toLowerCase() === formData.service.toLowerCase());
+          if (matched) {
+            setFormData(prev => ({ ...prev, category_id: String(matched.id) }));
+            setSelectedMainService(matched.name);
+          }
+        } else if (isUser && user?.categoryId) {
+          const matched = activeServices.find(s => s.id === user.categoryId);
+          if (matched) {
+            setFormData(prev => ({ ...prev, category_id: String(matched.id), service: matched.name }));
+            setSelectedMainService(matched.name);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setServicesLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, [formData.department_id, token, isUser, user]);
+
+  const handleDepartmentChange = (e) => {
+    const deptId = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      department_id: deptId,
+      category_id: '',
+      service: ''
+    }));
+    setSelectedMainService('');
+    setSelectedSubServices([]);
+  };
+
+  const handleServiceSelect = (e) => {
+    const catId = e.target.value;
+    const matched = services.find(s => String(s.id) === String(catId));
+    if (matched) {
+      setFormData(prev => ({
+        ...prev,
+        category_id: String(matched.id),
+        service: matched.name
+      }));
+      setSelectedMainService(matched.name);
+      setSelectedSubServices([]);
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        category_id: '',
+        service: ''
+      }));
+      setSelectedMainService('');
+      setSelectedSubServices([]);
+    }
+  };
+
+  const currentDepartmentName = useMemo(() => {
+    if (formData.department_id) {
+      const d = departments.find(item => String(item.id) === String(formData.department_id));
+      if (d) return d.name;
+    }
+    if (!isSuperAdmin && user?.departmentName) {
+      return user.departmentName;
+    }
+    return '';
+  }, [formData.department_id, departments, isSuperAdmin, user]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -217,6 +335,19 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
         }
       }
 
+      if (!submissionData.department_id) {
+        toast.error('Please select a department.');
+        setLoading(false);
+        return;
+      }
+      if (!submissionData.category_id) {
+        toast.error('Please select a service.');
+        setLoading(false);
+        return;
+      }
+      submissionData.department_id = parseInt(submissionData.department_id, 10);
+      submissionData.category_id = parseInt(submissionData.category_id, 10);
+
       const url = editData ? `/api/renewals/${editData.id}` : '/api/renewals';
       const method = editData ? 'PUT' : 'POST';
       
@@ -269,6 +400,50 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
           <form id="renewal-form" onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+              {/* Department selection: only ask if super_admin and no initialDepartmentId */}
+              {isSuperAdmin && !initialDepartmentId ? (
+                <div className="md:col-span-2">
+                  <label className="label flex items-center justify-between">
+                    <span>Department <span className="text-red-500">*</span></span>
+                    {currentDepartmentName && (
+                      <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
+                        Selected: {currentDepartmentName}
+                      </span>
+                    )}
+                  </label>
+                  <GlassSelect 
+                    required
+                    value={formData.department_id ? String(formData.department_id) : ''}
+                    placeholder="Select Department..."
+                    options={departments.map(d => ({ value: String(d.id), label: d.name }))}
+                    onChange={handleDepartmentChange}
+                    className="w-full"
+                  />
+                  {departmentsLoading && (
+                    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" /> Loading departments...
+                    </p>
+                  )}
+                </div>
+              ) : (
+                /* Department Badge: auto-assigned for dept_admin / user or when initialDepartmentId is provided */
+                <div className="md:col-span-2 p-3 rounded-xl border border-brand-500/20 bg-brand-500/5 dark:bg-brand-950/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {currentDepartmentName || 'Assigned Department'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400">
+                    Auto-assigned
+                  </span>
+                </div>
+              )}
+
               <div className="md:col-span-2">
                 <label className="label">Invoice Number <span className="text-red-500">*</span></label>
                 <input 
@@ -281,23 +456,51 @@ export default function RenewalForm({ onClose, onSuccess, editData = null }) {
                   placeholder="Enter invoice number..."
                 />
               </div>
+
               <div>
                 <label className="label">Client Name <span className="text-red-500">*</span></label>
                 <input type="text" name="client_name" required value={formData.client_name} onChange={handleChange} className="input-field" />
               </div>
+
               <div>
-                <label className="label">Service Name <span className="text-red-500">*</span></label>
-                <GlassSelect 
-                  required
-                  value={selectedMainService} 
-                  placeholder="Select Service"
-                  options={[
-                    ...PREDEFINED_SERVICES.map(serviceName => ({ value: serviceName, label: serviceName })),
-                    ...(selectedMainService && !PREDEFINED_SERVICES.includes(selectedMainService) ? [{ value: selectedMainService, label: selectedMainService }] : [])
-                  ]}
-                  onChange={handleMainServiceChange} 
-                  className="w-full"
-                />
+                <label className="label flex items-center justify-between">
+                  <span>Service Name <span className="text-red-500">*</span></span>
+                  {servicesLoading && (
+                    <span className="text-[11px] font-normal text-slate-400 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin text-brand-500" /> Loading services...
+                    </span>
+                  )}
+                </label>
+                {services.length > 0 ? (
+                  <GlassSelect 
+                    required
+                    value={formData.category_id ? String(formData.category_id) : ''} 
+                    placeholder="Select Service..."
+                    options={services.map(s => ({ value: String(s.id), label: s.name }))}
+                    onChange={handleServiceSelect} 
+                    className="w-full"
+                  />
+                ) : (
+                  <div>
+                    <GlassSelect 
+                      disabled
+                      value="" 
+                      placeholder={
+                        !formData.department_id 
+                          ? "First select a department above..." 
+                          : (servicesLoading ? "Loading services..." : "No services found in this department")
+                      }
+                      options={[]}
+                      onChange={() => {}} 
+                      className="w-full opacity-60 cursor-not-allowed"
+                    />
+                    {formData.department_id && !servicesLoading && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                        No active services found in this department. Please create services under User Management.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {SUB_SERVICES[selectedMainService] && (
                   <div className="mt-2.5 p-3 rounded-xl border border-slate-200/80 dark:border-white/10 bg-slate-50/70 dark:bg-white/[0.04] space-y-2">

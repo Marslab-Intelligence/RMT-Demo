@@ -60,7 +60,13 @@ async function filterIdsByOwnership(ids, req) {
 async function resolveScopeForCreate(req, res, bodyDepartmentId, bodyCategoryId) {
   const user = req.user;
   if (user.role === 'user') {
-    return { department_id: user.departmentId, category_id: user.categoryId };
+    const department_id = user.departmentId || parseInt(bodyDepartmentId, 10);
+    const category_id = user.categoryId || parseInt(bodyCategoryId, 10);
+    if (!department_id || !category_id) {
+      res.status(400).json({ error: 'Department and Service (category) are required.' });
+      return null;
+    }
+    return { department_id, category_id };
   }
 
   let department_id = user.role === 'dept_admin' ? user.departmentId : parseInt(bodyDepartmentId, 10);
@@ -1589,7 +1595,8 @@ router.put('/:id', authenticateToken, requireRole('super_admin', 'dept_admin', '
   try {
     const { 
       client_name, service, renewal_date, value, owner, client_email, sales_email, contact_number, reference_id, plan_period, plan_duration, expiry_reason, invoice_number, quotation_number,
-      product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity
+      product, description, quantity, purchase_cost, total_purchase_cost, sales_cost, total_sales_cost, profit, vendor, entity,
+      department_id: bodyDepartmentId, category_id: bodyCategoryId
     } = req.body;
     const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
     const renewal = rows[0];
@@ -1673,16 +1680,32 @@ router.put('/:id', authenticateToken, requireRole('super_admin', 'dept_admin', '
 
     const finalSalesEmail = (sales_email || '').toLowerCase().trim();
 
+    let updateDeptId = renewal.department_id;
+    let updateCatId = renewal.category_id;
+    if (req.user.role === 'super_admin' && bodyDepartmentId && bodyCategoryId) {
+      const pDept = parseInt(bodyDepartmentId, 10);
+      const pCat = parseInt(bodyCategoryId, 10);
+      if (pDept && pCat) {
+        const { rows: chk } = await db.query('SELECT id FROM categories WHERE id = $1 AND department_id = $2 AND is_active = TRUE', [pCat, pDept]);
+        if (chk.length > 0) {
+          updateDeptId = pDept;
+          updateCatId = pCat;
+        }
+      }
+    }
+
     await db.query(`
       UPDATE renewals SET 
         client_name = $1, service = $2, renewal_date = $3, value = $4, 
         owner = $5, client_email = $6, sales_email = $7, contact_number = $8, reference_id = $9, status = $10, edit_status = NULL, edit_reason = $11, plan_period = $12, renewal_confirmation = $13, expiry_reason = $14, invoice_number = $15, plan_duration = $16,
         product = $17, description = $18, quantity = $19, purchase_cost = $20, total_purchase_cost = $21, sales_cost = $22, total_sales_cost = $23, profit = $24, vendor = $25, entity = $26, quotation_number = $27,
+        department_id = $28, category_id = $29,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $28
+      WHERE id = $30
     `, [
       client_name, service, computedRenewalDate, value || 0, owner, client_email, finalSalesEmail, contact_number || '', reference_id || '', computedStatus, req.body.reason || null, plan_period || 'yearly_plan', computedRenewalConfirmation, finalExpiryReason, invoice_number, parseInt(plan_duration) || 1,
       product || '', description || '', parseInt(quantity) || 1, parseFloat(purchase_cost) || 0, parseFloat(total_purchase_cost) || 0, parseFloat(sales_cost) || 0, parseFloat(total_sales_cost) || 0, parseFloat(profit) || 0, vendor || '', (entity || '').trim().toUpperCase(), quotation_number || '',
+      updateDeptId, updateCatId,
       req.params.id
     ]);
 

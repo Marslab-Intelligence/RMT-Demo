@@ -36,6 +36,7 @@ const Pricing = safeLazy(() => import('./pages/Pricing'));
 const ApprovalInbox = safeLazy(() => import('./pages/ApprovalInbox'));
 const AgentHealth = safeLazy(() => import('./pages/AgentHealth'));
 const Departments = safeLazy(() => import('./pages/Departments'));
+const DepartmentAnalytics = safeLazy(() => import('./pages/DepartmentAnalytics'));
 
 const PageLoader = () => (
   <div className="min-h-[60vh] w-full flex items-center justify-center">
@@ -83,6 +84,7 @@ function App() {
           <Route path="/approval-inbox" element={<ProtectedRoute><ApprovalInbox /></ProtectedRoute>} />
           <Route path="/agent-health" element={<AdminRoute><AgentHealth /></AdminRoute>} />
           
+          <Route path="/analytics" element={<AdminRoute><DepartmentAnalytics /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><Departments /></AdminRoute>} />
           <Route path="/admin/departments" element={<Navigate to="/admin/users" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

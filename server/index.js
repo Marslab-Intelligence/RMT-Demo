@@ -53,6 +53,8 @@ import webhookRoutes from './routes/webhooks.js';
 import visitRoutes from './routes/visits.js';
 import adminUsersRoutes from './routes/adminUsers.js';
 import departmentRoutes, { servicesRouter } from './routes/departments.js';
+import userActivityRoutes from './routes/userActivity.js';
+import analyticsRoutes from './routes/analytics.js';
 import automationRoutes from './routes/automation.js';
 import pricingRoutes from './routes/pricing.js';
 import { startScheduler } from './services/scheduler.js';
@@ -211,6 +213,8 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/visits', visitRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/departments', departmentRoutes);
+app.use('/api/users', userActivityRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/services', servicesRouter);
 app.use('/api/automation', automationRoutes);
 app.use('/api/tiles', tilesRoutes);
@@ -313,3 +317,16 @@ app.listen(PORT, async () => {
 
   startScheduler();
 });
+
+process.on('uncaughtException', (err) => {
+  console.error('🔥 [Process UncaughtException]', err?.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('🔥 [Process UnhandledRejection]', reason?.message || reason);
+});
+
+process.on('SIGHUP', () => {
+  console.log('⚠️ [Process] Received SIGHUP — ignoring to keep server running');
+});
+

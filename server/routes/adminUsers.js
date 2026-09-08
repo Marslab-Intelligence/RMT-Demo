@@ -108,7 +108,54 @@ router.post('/', authenticateToken, adminOnly, async (req, res) => {
   }
 
   try {
-    const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user already exists
+    const { rows: existingUsers } = await db.query(
+      'SELECT id, username, email, full_name, role, department_id, category_id, is_active FROM users WHERE LOWER(email) = $1',
+      [normalizedEmail]
+    );
+
+    if (existingUsers.length > 0) {
+      const existing = existingUsers[0];
+      // If already assigned to this department and category and active
+      if (existing.department_id === finalDepartmentId && existing.category_id === finalCategoryId && existing.role === role && existing.is_active) {
+        return res.status(409).json({ error: `User with email "${normalizedEmail}" is already active in this department and service.` });
+      }
+
+      // Reassign or reactivate existing user
+      const { rows: updatedRows } = await db.query(
+        `UPDATE users
+         SET full_name = COALESCE(NULLIF($1, ''), full_name),
+             role = $2,
+             department_id = $3,
+             category_id = $4,
+             is_active = TRUE,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5
+         RETURNING id, username, email, full_name, role, avatar_color, is_active, department_id, category_id`,
+        [full_name.trim(), role, finalDepartmentId, finalCategoryId, existing.id]
+      );
+
+      await db.query(
+        `INSERT INTO activity_logs (user_id, action, entity_type, details) VALUES ($1, 'update', 'user', $2)`,
+        [req.user.id, `Admin reassigned user: ${normalizedEmail} (${role})`]
+      );
+
+      return res.status(200).json(updatedRows[0]);
+    }
+
+    // New user: ensure collision-safe username
+    let baseUsername = normalizedEmail.split('@')[0].replace(/[^a-z0-9]/g, '_');
+    if (!baseUsername) baseUsername = 'user';
+    let username = baseUsername;
+    let count = 1;
+    while (true) {
+      const { rows: nameCheck } = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+      if (nameCheck.length === 0) break;
+      username = `${baseUsername}_${count++}`;
+    }
+
     const placeholderPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
     const avatar_color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
@@ -116,7 +163,7 @@ router.post('/', authenticateToken, adminOnly, async (req, res) => {
       `INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active, department_id, category_id)
        VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)
        RETURNING id, username, email, full_name, role, avatar_color, is_active, department_id, category_id`,
-      [username, email.toLowerCase().trim(), placeholderPassword, full_name.trim(), role, avatar_color, finalDepartmentId, finalCategoryId]
+      [username, normalizedEmail, placeholderPassword, full_name.trim(), role, avatar_color, finalDepartmentId, finalCategoryId]
     );
 
     await db.query(

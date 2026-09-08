@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { formatDateTime } from '../utils/formatters';
+import { formatDateTime, formatTimeAgo } from '../utils/formatters';
 import VersionNotifier from './VersionNotifier';
 import AgentDrawer from './AgentDrawer';
 import { APP_VERSION } from '../version';
@@ -33,7 +33,10 @@ import {
   Mail,
   Pin,
   Tag,
-  Plus
+  Plus,
+  CheckCircle2,
+  Info,
+  TrendingUp
 } from 'lucide-react';
 
 const getRoleLabel = (role) => {
@@ -48,6 +51,16 @@ const getRoleBadgeStyle = (role) => {
   if (role === 'user') return 'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/50';
   return '';
 };
+
+const getNotificationIcon = (type) => {
+  switch (type) {
+    case 'success': return <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />;
+    case 'warning': return <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />;
+    case 'error': return <ShieldAlert className="w-4 h-4 text-rose-500 flex-shrink-0" />;
+    default: return <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />;
+  }
+};
+
 
 export default function Layout({ children }) {
   const { user, logout, token, getValidToken } = useAuth();
@@ -559,6 +572,7 @@ export default function Layout({ children }) {
       label: 'Analytics',
       items: [
         { name: (user?.role === 'super_admin' || user?.role === 'dept_admin') ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
+        ...((user?.role === 'super_admin' || user?.role === 'dept_admin') ? [{ name: 'Team Performance', path: '/analytics', icon: TrendingUp }] : []),
         { name: 'Record Details', path: '/edits-history', icon: History },
         { name: 'Visit Tracking', path: '/visits', icon: MapPin },
       ],

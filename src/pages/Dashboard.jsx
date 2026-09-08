@@ -59,7 +59,6 @@ export default function Dashboard() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [selectedQuarterIdx, setSelectedQuarterIdx] = useState(null); // Portfolio Attainment quarter tab; null = "All" (current month)
   const [actionableItems, setActionableItems] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
@@ -148,11 +147,18 @@ export default function Dashboard() {
       try {
         const hasNotifications = user?.role === 'user' || (user?.role === 'super_admin' || user?.role === 'dept_admin');
 
+        // The quarter pills / date-range filter apply to the whole dashboard:
+        // stats and the action queue are refetched server-side scoped to the
+        // range (see server/routes/dashboard.js buildDateRangeClause), while
+        // actionable-items and the monthly chart already filter client-side
+        // below (filteredActionableItems/filteredMonthlyData).
+        const rangeQuery = isDateFiltered ? `startDate=${dateRange.start}&endDate=${dateRange.end}` : '';
+
         const promises = [
-          fetch('/api/dashboard/stats', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('/api/dashboard/actionable-items?limit=8', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`/api/dashboard/stats${rangeQuery ? `?${rangeQuery}` : ''}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`/api/dashboard/actionable-items?limit=8${rangeQuery ? `&${rangeQuery}` : ''}`, { headers: { 'Authorization': `Bearer ${token}` } }),
           fetch('/api/dashboard/charts/monthly', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('/api/dashboard/notification-center', { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch(`/api/dashboard/notification-center${rangeQuery ? `?${rangeQuery}` : ''}`, { headers: { 'Authorization': `Bearer ${token}` } })
         ];
 
         if (hasNotifications) {
@@ -187,7 +193,7 @@ export default function Dashboard() {
     if (token) {
       fetchData();
     }
-  }, [token, user]);
+  }, [token, user, isDateFiltered, dateRange.start, dateRange.end]);
 
   useEffect(() => {
     if (!token || (user?.role !== 'user' && (user?.role !== 'super_admin' && user?.role !== 'dept_admin'))) return;
@@ -452,19 +458,34 @@ export default function Dashboard() {
     ? Math.round((stats.active / stats.total) * 100)
     : 0;
 
-  // Quarter selector for the attainment card — always shows real calendar
-  // quarters (Q1 = Jan-Mar, ... Q4 = Oct-Dec) of the current year, so the
-  // tabs are always present regardless of how much data is loaded. Only
-  // "Revenue Capture" reacts to it: it's the only one of the three gauges
-  // with real per-month figures (monthlyData) behind it. Conversion &
-  // retention are live snapshots — RMT doesn't store a historical breakdown
-  // for those — so they stay constant across quarters, labeled as such.
+  // Quarter selector — Q1-Q4 pills are just presets on top of the SAME
+  // dateRange state that drives the header's date filter, so picking a
+  // quarter here filters the whole dashboard (all 10 stat boxes, the action
+  // queue, upcoming renewals, and the revenue trend chart), not just this
+  // card. selectedQuarterIdx is derived (not separate state) by checking
+  // whether dateRange currently equals one of the 4 calendar-quarter ranges.
   const currentYear = new Date().getFullYear();
   const calendarQuarters = [0, 1, 2, 3].map((q) => {
     const monthNums = [q * 3 + 1, q * 3 + 2, q * 3 + 3];
     return monthNums.map((n) => `${currentYear}-${String(n).padStart(2, '0')}`);
   });
+  const quarterDateRanges = calendarQuarters.map((keys) => {
+    const start = `${keys[0]}-01`;
+    const [, lastMonthNum] = keys[2].split('-');
+    const lastDay = new Date(currentYear, parseInt(lastMonthNum, 10), 0).getDate();
+    return { start, end: `${keys[2]}-${String(lastDay).padStart(2, '0')}` };
+  });
+  const selectedQuarterIdxRaw = quarterDateRanges.findIndex(
+    (r) => dateRange.start === r.start && dateRange.end === r.end
+  );
+  const selectedQuarterIdx = selectedQuarterIdxRaw === -1 ? null : selectedQuarterIdxRaw;
+  const applyQuarter = (idx) => setDateRange(quarterDateRanges[idx]);
 
+  // Only "Revenue Capture" reacts to the quarter/date filter: it's the only
+  // one of the three attainment gauges with real per-month figures
+  // (monthlyData) behind it. Conversion & retention are live snapshots —
+  // RMT doesn't store a historical breakdown for those — so they stay
+  // constant across quarters, labeled as such.
   let revenueCapturePct = 0;
   let revenueCaptureSublabel = `${formatCurrency(stats?.revenueThisMonth || 0)} of ${formatCurrency(stats?.expectedRevenue || 0)}`;
   if (selectedQuarterIdx === null) {
@@ -647,16 +668,16 @@ export default function Dashboard() {
             <h2 className="text-base font-bold text-surface-900 dark:text-white">Portfolio Attainment</h2>
             <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
               {selectedQuarterIdx === null
-                ? 'Live performance against a 100% target'
-                : 'Revenue Capture shown for the selected quarter · Conversion & Retention are live totals'}
+                ? (isDateFiltered ? 'Revenue Capture shown for the selected range · Conversion & Retention are live totals' : 'Live performance against a 100% target')
+                : 'Filtering the whole dashboard to this quarter · Conversion & Retention stay live totals'}
             </p>
           </div>
 
           <div className="flex items-center p-1 bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] rounded-xl w-fit">
             <button
-              onClick={() => setSelectedQuarterIdx(null)}
+              onClick={clearDateRange}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                selectedQuarterIdx === null ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                !isDateFiltered ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               All
@@ -664,7 +685,8 @@ export default function Dashboard() {
             {[0, 1, 2, 3].map((idx) => (
               <button
                 key={idx}
-                onClick={() => setSelectedQuarterIdx(idx)}
+                onClick={() => applyQuarter(idx)}
+                title={`Filter the whole dashboard to Q${idx + 1} ${currentYear}`}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   selectedQuarterIdx === idx ? 'bg-brand-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}

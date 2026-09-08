@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Building2, Plus, X, Loader2, ChevronRight, Tag, Users as UsersIcon, Power, ShieldCheck, Trash2 } from 'lucide-react';
+import { Building2, Plus, X, Loader2, ChevronRight, Tag, Users as UsersIcon, Power, ShieldCheck, Trash2, FilePlus } from 'lucide-react';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
+import RenewalForm from '../components/RenewalForm';
 
 function getInitials(name = '') {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || '?';
@@ -31,6 +32,7 @@ export default function Departments() {
 
   const [addAdminFor, setAddAdminFor] = useState(null); // department id or null
   const [addUserFor, setAddUserFor] = useState(null); // { departmentId, categoryId, categoryName } or null
+  const [addRenewalFor, setAddRenewalFor] = useState(null); // { departmentId, categoryId } or null
   const [personForm, setPersonForm] = useState({ full_name: '', email: '' });
   const [submittingPerson, setSubmittingPerson] = useState(false);
   const [removingUserId, setRemovingUserId] = useState(null);
@@ -320,6 +322,22 @@ export default function Departments() {
 
               {expanded === dept.id && (
                 <div className="px-5 pb-4 border-t border-slate-200/60 dark:border-white/10 pt-4 space-y-5">
+                  
+                  {/* Department Quick Actions */}
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-white/10">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Department Renewals</p>
+                      <p className="text-[11px] text-slate-400">Add renewal records directly inside {dept.name}.</p>
+                    </div>
+                    <button
+                      onClick={() => setAddRenewalFor({ departmentId: dept.id })}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 border border-brand-500/20 transition-colors"
+                    >
+                      <FilePlus className="w-3.5 h-3.5" />
+                      <span>Add Renewal</span>
+                    </button>
+                  </div>
+
                   {/* Department Admins — super_admin manages, dept_admin sees read-only */}
                   {isSuperAdmin && (
                     <div>
@@ -371,6 +389,13 @@ export default function Departments() {
                                   <p className="text-[10px] text-slate-400">{svcUsers.length} user{svcUsers.length === 1 ? '' : 's'} assigned</p>
                                 </div>
                                 {!svc.is_active && <StatusBadge status="expired" label="Inactive" size="xs" />}
+                                <button
+                                  onClick={() => setAddRenewalFor({ departmentId: dept.id, categoryId: svc.id })}
+                                  className="flex-shrink-0 flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                                  title={`Add Renewal Record in ${svc.name}`}
+                                >
+                                  <FilePlus className="w-3 h-3" /> Add Record
+                                </button>
                                 <button
                                   onClick={() => openAddUser(dept.id, svc)}
                                   className="flex-shrink-0 flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 transition-colors"
@@ -588,6 +613,19 @@ export default function Departments() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Add Renewal Record modal */}
+      {addRenewalFor && (
+        <RenewalForm
+          initialDepartmentId={addRenewalFor.departmentId}
+          initialCategoryId={addRenewalFor.categoryId}
+          onClose={() => setAddRenewalFor(null)}
+          onSuccess={() => {
+            setAddRenewalFor(null);
+            toast.success('Renewal record added successfully.');
+          }}
+        />
       )}
     </div>
   );

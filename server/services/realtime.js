@@ -62,19 +62,46 @@ export const registerClient = async (req, res) => {
   res.write('data: {"type":"connected"}\n\n');
   if (typeof res.flush === 'function') res.flush();
 
+  // Clean up on client disconnection
+  let isCleanedUp = false;
+  const cleanup = () => {
+    if (isCleanedUp) return;
+    isCleanedUp = true;
+    clearInterval(keepAliveInterval);
+    clients = clients.filter(c => c.id !== clientObj.id);
+    console.log(`🔌 Real-Time Client disconnected. Total active clients: ${clients.length}`);
+  };
+
+  req.on('close', cleanup);
+  req.on('end', cleanup);
+  req.on('error', (err) => {
+    console.warn('SSE req error:', err.message);
+    cleanup();
+  });
+  res.on('error', (err) => {
+    console.warn('SSE res error:', err.message);
+    cleanup();
+  });
+  res.on('close', cleanup);
+  res.on('finish', cleanup);
+
   // Keep HTTP/2 & proxy connections alive with comments + ping every 15 seconds
   const keepAliveInterval = setInterval(() => {
     try {
+      if (res.writableEnded || res.destroyed) {
+        cleanup();
+        return;
+      }
       res.write(': keep-alive\n\n');
       res.write('data: {"type":"ping"}\n\n');
       if (typeof res.flush === 'function') res.flush();
     } catch (err) {
-      clearInterval(keepAliveInterval);
+      cleanup();
     }
   }, 15000);
 
   const clientObj = {
-    id: Date.now(),
+    id: Date.now() + Math.random(),
     res,
     user: {
       role: decoded.role,
@@ -87,13 +114,6 @@ export const registerClient = async (req, res) => {
   clients.push(clientObj);
 
   console.log(`🔌 Real-Time Client connected. Total active clients: ${clients.length}`);
-
-  // Clean up on client disconnection
-  req.on('close', () => {
-    clearInterval(keepAliveInterval);
-    clients = clients.filter(c => c.id !== clientObj.id);
-    console.log(`🔌 Real-Time Client disconnected. Total active clients: ${clients.length}`);
-  });
 };
 
 // `data` is only scoping-sensitive when it looks like a renewal row (carries
@@ -108,13 +128,18 @@ export const broadcastEvent = (type, data) => {
   const fullPayload = JSON.stringify({ type, data });
   const strippedPayload = JSON.stringify({ type, data: null });
 
+  // Clean up any stale clients before broadcasting
+  clients = clients.filter(client => !client.res.writableEnded && !client.res.destroyed);
+
   clients.forEach(client => {
     try {
+      if (client.res.writableEnded || client.res.destroyed) return;
       const visible = !scoped || isRecordVisibleToUser(data, client.user);
       client.res.write(`data: ${visible ? fullPayload : strippedPayload}\n\n`);
       if (typeof client.res.flush === 'function') client.res.flush();
     } catch (err) {
-      console.error('Error writing to client:', err.message);
+      console.warn('Error writing to client:', err.message);
     }
   });
 };
+

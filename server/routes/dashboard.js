@@ -6,31 +6,49 @@ import { buildScopeClause, notificationRoleBuckets } from '../utils/scope.js';
 
 const router = Router();
 
+// Optional ?startDate=&endDate= (YYYY-MM-DD) query params — drives the
+// dashboard's quarter/date-range filter (all 10 stat boxes + the action
+// queue). Appended after the scope clause's own params, so callers pass
+// scopeParams.length as nextParamIndex. Both endpoints below already filter
+// their underlying rows on renewal_date in various ways, so this ANDs a
+// renewal_date bound onto whatever scope + status logic each query already
+// has, rather than replacing it.
+function buildDateRangeClause(req, nextParamIndex) {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) return { clause: '', params: [] };
+  return {
+    clause: ` AND renewal_date BETWEEN $${nextParamIndex} AND $${nextParamIndex + 1}`,
+    params: [startDate, endDate],
+  };
+}
+
 // Dashboard KPIs
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const scope = buildScopeClause(req.user, 1);
-    const p = scope.params;
+    const dateRange = buildDateRangeClause(req, scope.params.length + 1);
+    const p = [...scope.params, ...dateRange.params];
+    const clause = scope.clause + dateRange.clause;
 
-    const totalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE is_deleted = false ${scope.clause}`, p);
-    const activeReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Active' AND is_deleted = false ${scope.clause}`, p);
-    const pendingReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Pending Renewal' AND is_deleted = false ${scope.clause}`, p);
-    const renewedReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND is_deleted = false ${scope.clause}`, p);
-    const expiredReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Expired' AND is_deleted = false ${scope.clause}`, p);
-    const revenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE is_deleted = false ${scope.clause}`, p);
-    const profitReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status != 'Expired' AND is_deleted = false ${scope.clause}`, p);
-    const lossReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status = 'Expired' AND is_deleted = false ${scope.clause}`, p);
+    const totalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE is_deleted = false ${clause}`, p);
+    const activeReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Active' AND is_deleted = false ${clause}`, p);
+    const pendingReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Pending Renewal' AND is_deleted = false ${clause}`, p);
+    const renewedReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND is_deleted = false ${clause}`, p);
+    const expiredReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE status = 'Expired' AND is_deleted = false ${clause}`, p);
+    const revenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE is_deleted = false ${clause}`, p);
+    const profitReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status != 'Expired' AND is_deleted = false ${clause}`, p);
+    const lossReq = db.query(`SELECT COALESCE(SUM(profit), 0) as total FROM renewals WHERE status = 'Expired' AND is_deleted = false ${clause}`, p);
 
     // Phase 2 Actionable Metrics
-    const dueTodayReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date = CURRENT_DATE AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
-    const dueThisWeekReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date >= CURRENT_DATE AND renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
-    const dueThisMonthReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
-    const overdueReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_date < CURRENT_DATE OR status = 'Expired') AND is_deleted = false AND status != 'Renewed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}`, p);
-    const pendingClientApprovalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_confirmation = 'pending' OR status = 'Pending Renewal') AND is_deleted = false ${scope.clause}`, p);
-    const quotesSentReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (invoice_status = 'Sent' OR (invoice_number IS NOT NULL AND invoice_number != '')) AND is_deleted = false ${scope.clause}`, p);
-    const revenueThisMonthReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND (to_char(updated_at, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') OR to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')) AND is_deleted = false ${scope.clause}`, p);
-    const expectedRevenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${scope.clause}`, p);
-    const pendingFollowupsReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE follow_up_status != 'Completed' AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${scope.clause}`, p);
+    const dueTodayReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date = CURRENT_DATE AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}`, p);
+    const dueThisWeekReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE renewal_date >= CURRENT_DATE AND renewal_date <= (CURRENT_DATE + INTERVAL '7 days')::date AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}`, p);
+    const dueThisMonthReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') AND is_deleted = false AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}`, p);
+    const overdueReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_date < CURRENT_DATE OR status = 'Expired') AND is_deleted = false AND status != 'Renewed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}`, p);
+    const pendingClientApprovalReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (renewal_confirmation = 'pending' OR status = 'Pending Renewal') AND is_deleted = false ${clause}`, p);
+    const quotesSentReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE (invoice_status = 'Sent' OR (invoice_number IS NOT NULL AND invoice_number != '')) AND is_deleted = false ${clause}`, p);
+    const revenueThisMonthReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE (status = 'Renewed' OR renewal_confirmation = 'renewed') AND (to_char(updated_at, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM') OR to_char(renewal_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')) AND is_deleted = false ${clause}`, p);
+    const expectedRevenueReq = db.query(`SELECT COALESCE(SUM(value), 0) as total FROM renewals WHERE status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${clause}`, p);
+    const pendingFollowupsReq = db.query(`SELECT COUNT(*) as count FROM renewals WHERE follow_up_status != 'Completed' AND status IN ('Active','Pending Renewal') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') AND is_deleted = false ${clause}`, p);
 
     const today = new Date().toISOString().split('T')[0];
     const d30 = new Date(); d30.setDate(d30.getDate() + 30);
@@ -225,47 +243,49 @@ router.get('/email-logs', authenticateToken, requireRole('super_admin', 'dept_ad
 router.get('/notification-center', authenticateToken, async (req, res) => {
   try {
     const scope = buildScopeClause(req.user, 1);
-    const p = scope.params;
+    const dateRange = buildDateRangeClause(req, scope.params.length + 1);
+    const p = [...scope.params, ...dateRange.params];
+    const clause = scope.clause + dateRange.clause;
 
     const dueTodayReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'due_today' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_date = CURRENT_DATE AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
+      WHERE is_deleted = false AND renewal_date = CURRENT_DATE AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}
       ORDER BY value DESC
     `, p);
 
     const overdueReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'overdue' as category
       FROM renewals
-      WHERE is_deleted = false AND (renewal_date < CURRENT_DATE OR status = 'Expired') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
+      WHERE is_deleted = false AND (renewal_date < CURRENT_DATE OR status = 'Expired') AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}
       ORDER BY renewal_date ASC
     `, p);
 
     const followupsDueTodayReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'followup_today' as category
       FROM renewals
-      WHERE is_deleted = false AND follow_up_status != 'Completed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${scope.clause}
+      WHERE is_deleted = false AND follow_up_status != 'Completed' AND (renewal_confirmation IS NULL OR renewal_confirmation != 'renewed') ${clause}
       ORDER BY renewal_date ASC
     `, p);
 
     const clientResponseReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, renewal_confirmation, 'client_response' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_confirmation IN ('awaiting_client_approval', 'reminder_sent', 'quote_sent') ${scope.clause}
+      WHERE is_deleted = false AND renewal_confirmation IN ('awaiting_client_approval', 'reminder_sent', 'quote_sent') ${clause}
       ORDER BY updated_at DESC
     `, p);
 
     const quotePendingReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'quote_pending' as category
       FROM renewals
-      WHERE is_deleted = false AND renewal_confirmation IN ('quote_sent', 'awaiting_client_approval') ${scope.clause}
+      WHERE is_deleted = false AND renewal_confirmation IN ('quote_sent', 'awaiting_client_approval') ${clause}
       ORDER BY renewal_date ASC
     `, p);
 
     const paymentPendingReq = db.query(`
       SELECT id, unique_id, client_name, service, renewal_date, value, status, 'payment_pending' as category
       FROM renewals
-      WHERE is_deleted = false AND invoice_status = 'Sent' AND (payment_status = 'No' OR payment_status IS NULL) ${scope.clause}
+      WHERE is_deleted = false AND invoice_status = 'Sent' AND (payment_status = 'No' OR payment_status IS NULL) ${clause}
       ORDER BY value DESC
     `, p);
 

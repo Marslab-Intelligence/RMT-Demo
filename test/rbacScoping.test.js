@@ -113,3 +113,13 @@ test('RBAC v2 - isRecordVisibleToUser agrees with the SQL-level scoping for the 
   assert.equal(isRecordVisibleToUser(msRecord, awsUser()), false);
   assert.equal(isRecordVisibleToUser(msRecord, msUser()), true);
 });
+
+test('RBAC v2 - department user can read categories for their department', async () => {
+  const { rows } = await db.query(
+    'SELECT id, name FROM categories WHERE department_id = $1 AND is_active = TRUE',
+    [softwareDeptId]
+  );
+  assert.ok(rows.length > 0);
+  assert.ok(rows.some(r => r.id === awsCatId));
+});
+

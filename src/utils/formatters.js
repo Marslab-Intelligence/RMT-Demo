@@ -81,3 +81,26 @@ export const formatDateTime = (dateString, options = {}) => {
   
   return date.toLocaleString('en-IN', defaultOptions);
 };
+
+export const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
+  let parsedString = dateString;
+  if (typeof dateString === 'string') {
+    if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-GMT')) {
+      parsedString = dateString.includes('T') ? dateString + 'Z' : dateString.replace(' ', 'T') + 'Z';
+    }
+  }
+  const date = new Date(parsedString);
+  if (isNaN(date.getTime())) return '';
+  const now = new Date();
+  const diffInSeconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+  if (diffInSeconds < 60) return 'Just now';
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  return formatDate(dateString);
+};
+
