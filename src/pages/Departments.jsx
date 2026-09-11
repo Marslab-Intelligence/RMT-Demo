@@ -9,6 +9,7 @@ import {
   Loader2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Tag,
   Users as UsersIcon,
   Power,
@@ -81,6 +82,16 @@ export default function Departments() {
   const [deptTab, setDeptTab] = useState({}); // { [deptId]: 'services' | 'admins' }
   const [services, setServices] = useState({}); // { [departmentId]: [service, ...] }
   const [servicesLoading, setServicesLoading] = useState({});
+
+  // Split Console Services scroll & expand state (limiting to 2-3 rows)
+  const servicesScrollRef = useRef(null);
+  const [isServicesExpanded, setIsServicesExpanded] = useState(false);
+
+  const scrollServices = (direction) => {
+    if (!servicesScrollRef.current) return;
+    const scrollAmount = direction === 'down' ? 240 : -240;
+    servicesScrollRef.current.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+  };
 
   // Toolbar states
   const [searchQuery, setSearchQuery] = useState('');
@@ -1229,7 +1240,7 @@ export default function Departments() {
 
                 {/* Sub-tabs: Services vs Admins */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-100/70 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5">
                       <button
                         onClick={() => setDeptTab(p => ({ ...p, [activeSelectedDept.id]: 'services' }))}
@@ -1262,13 +1273,45 @@ export default function Departments() {
                       </button>
                     </div>
 
-                    <button
-                      onClick={() => setAddRenewalFor({ departmentId: activeSelectedDept.id })}
-                      className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
-                    >
-                      <FilePlus className="w-3.5 h-3.5" />
-                      <span>Create Renewal</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Services Navigation / Scroll Controls */}
+                      {(deptTab[activeSelectedDept.id] || 'services') === 'services' && (services[activeSelectedDept.id]?.length || 0) > 4 && (
+                        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950/60 p-1 rounded-xl border border-slate-200/60 dark:border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => scrollServices('up')}
+                            className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                            title="Scroll services up"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => scrollServices('down')}
+                            className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                            title="Scroll services down"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsServicesExpanded(p => !p)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors border-l border-slate-200 dark:border-white/10 ml-0.5 pl-2"
+                            title={isServicesExpanded ? "Lock to 2-3 rows scrollable" : "Expand all rows"}
+                          >
+                            {isServicesExpanded ? 'Compact (3 Rows)' : 'Expand All'}
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => setAddRenewalFor({ departmentId: activeSelectedDept.id })}
+                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+                      >
+                        <FilePlus className="w-3.5 h-3.5" />
+                        <span>Create Renewal</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Tab 1 Content: Services Grid */}
@@ -1298,62 +1341,104 @@ export default function Departments() {
                           />
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {services[activeSelectedDept.id].map(svc => {
-                            const svcUsers = usersByCategory[svc.id] || [];
-                            return (
-                              <div
-                                key={svc.id}
-                                className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-slate-950/40 p-4 flex flex-col justify-between space-y-3 shadow-xs hover:border-brand-500/30 transition-all"
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <Tag className="w-4 h-4 text-brand-500 flex-shrink-0" />
-                                      <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{svc.name}</h4>
+                        <div className="space-y-3">
+                          <div
+                            ref={servicesScrollRef}
+                            className={`rounded-2xl transition-all ${
+                              isServicesExpanded
+                                ? 'max-h-none'
+                                : 'max-h-[390px] overflow-y-auto custom-scrollbar pr-1.5'
+                            }`}
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {services[activeSelectedDept.id].map(svc => {
+                                const svcUsers = usersByCategory[svc.id] || [];
+                                return (
+                                  <div
+                                    key={svc.id}
+                                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-slate-950/40 p-4 flex flex-col justify-between space-y-3 shadow-xs hover:border-brand-500/30 transition-all"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <Tag className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                                          <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{svc.name}</h4>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1">
+                                          {svcUsers.length} assigned member{svcUsers.length === 1 ? '' : 's'}
+                                        </p>
+                                      </div>
+
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => setAddRenewalFor({ departmentId: activeSelectedDept.id, categoryId: svc.id })}
+                                          className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-bold px-2 flex items-center gap-1"
+                                          title="New Renewal"
+                                        >
+                                          <FilePlus className="w-3 h-3" /> Record
+                                        </button>
+                                        <button
+                                          onClick={() => openAddUser(activeSelectedDept.id, svc)}
+                                          className="p-1 rounded bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20 text-[10px] font-bold px-2 flex items-center gap-1"
+                                          title="Add Member"
+                                        >
+                                          <Plus className="w-3 h-3" /> User
+                                        </button>
+                                      </div>
                                     </div>
-                                    <p className="text-[11px] text-slate-400 mt-1">
-                                      {svcUsers.length} assigned member{svcUsers.length === 1 ? '' : 's'}
-                                    </p>
-                                  </div>
 
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => setAddRenewalFor({ departmentId: activeSelectedDept.id, categoryId: svc.id })}
-                                      className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-bold px-2 flex items-center gap-1"
-                                      title="New Renewal"
-                                    >
-                                      <FilePlus className="w-3 h-3" /> Record
-                                    </button>
-                                    <button
-                                      onClick={() => openAddUser(activeSelectedDept.id, svc)}
-                                      className="p-1 rounded bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20 text-[10px] font-bold px-2 flex items-center gap-1"
-                                      title="Add Member"
-                                    >
-                                      <Plus className="w-3 h-3" /> User
-                                    </button>
+                                    {/* Assigned Users List */}
+                                    <div className="pt-2 border-t border-slate-100 dark:border-white/5 space-y-1.5">
+                                      {svcUsers.length === 0 ? (
+                                        <p className="text-[10px] text-slate-400 italic">No operators assigned to this category.</p>
+                                      ) : (
+                                        svcUsers.map(u => (
+                                          <PersonRow
+                                            key={u.id}
+                                            person={u}
+                                            onRemove={handleRemovePerson}
+                                            removing={removingUserId === u.id}
+                                            disableRemove={u.id === user?.id}
+                                          />
+                                        ))
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-                                {/* Assigned Users List */}
-                                <div className="pt-2 border-t border-slate-100 dark:border-white/5 space-y-1.5">
-                                  {svcUsers.length === 0 ? (
-                                    <p className="text-[10px] text-slate-400 italic">No operators assigned to this category.</p>
-                                  ) : (
-                                    svcUsers.map(u => (
-                                      <PersonRow
-                                        key={u.id}
-                                        person={u}
-                                        onRemove={handleRemovePerson}
-                                        removing={removingUserId === u.id}
-                                        disableRemove={u.id === user?.id}
-                                      />
-                                    ))
-                                  )}
-                                </div>
+                          {/* Footer hint & scroll actions when more than 4 services */}
+                          {(services[activeSelectedDept.id]?.length || 0) > 4 && !isServicesExpanded && (
+                            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50/80 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 text-xs text-slate-500 dark:text-slate-400">
+                              <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+                                <span className="text-[11px] font-medium">
+                                  Showing 2–3 rows of {services[activeSelectedDept.id].length} services • Scroll container to view all
+                                </span>
                               </div>
-                            );
-                          })}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => scrollServices('up')}
+                                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors shadow-2xs"
+                                  title="Scroll Up"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => scrollServices('down')}
+                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-xs flex items-center gap-1 border border-slate-200/60 dark:border-white/5"
+                                  title="Scroll down"
+                                >
+                                  <span>Scroll More</span>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1376,35 +1461,37 @@ export default function Departments() {
                           )}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                          {deptAdminsByDept[activeSelectedDept.id].map(adm => (
-                            <div
-                              key={adm.id}
-                              className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-xs"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div
-                                  className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs flex-shrink-0"
-                                  style={{ background: adm.avatar_color || '#d97706' }}
-                                >
-                                  {getInitials(adm.full_name)}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{adm.full_name}</p>
-                                  <p className="text-[11px] text-slate-400 font-mono truncate">{adm.email}</p>
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => handleRemovePerson(adm)}
-                                disabled={adm.id === user?.id || removingUserId === adm.id}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors disabled:opacity-30"
-                                title="Remove Admin"
+                        <div className="max-h-[390px] overflow-y-auto custom-scrollbar pr-1.5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                            {deptAdminsByDept[activeSelectedDept.id].map(adm => (
+                              <div
+                                key={adm.id}
+                                className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-slate-950/40 flex items-center justify-between gap-3 shadow-xs"
                               >
-                                {removingUserId === adm.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          ))}
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div
+                                    className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs flex-shrink-0"
+                                    style={{ background: adm.avatar_color || '#d97706' }}
+                                  >
+                                    {getInitials(adm.full_name)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{adm.full_name}</p>
+                                    <p className="text-[11px] text-slate-400 font-mono truncate">{adm.email}</p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => handleRemovePerson(adm)}
+                                  disabled={adm.id === user?.id || removingUserId === adm.id}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 transition-colors disabled:opacity-30"
+                                  title="Remove Admin"
+                                >
+                                  {removingUserId === adm.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
