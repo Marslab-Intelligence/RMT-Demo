@@ -512,196 +512,140 @@ export default function RenewalsList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
-  
-  // Column multi-select filters initialized from searchParams so direct links and back button work seamlessly
-  const [dateRangeFilter, setDateRangeFilter] = useState(() => {
-    const d = searchParams.get('dateRange');
-    if (!d || d === 'all') return [];
-    return d.split(',').filter(Boolean);
-  });
-  const [valueFilter, setValueFilter] = useState(() => {
-    const v = searchParams.get('valueRange');
-    if (!v || v === 'all') return [];
-    return v.split(',').filter(Boolean);
-  });
-  const [statusColFilter, setStatusColFilter] = useState(() => {
-    const s = searchParams.get('statusCol');
-    if (!s || s === 'all') return [];
-    return s.split(',').filter(Boolean);
-  });
-  const [renewedFilter, setRenewedFilter] = useState(() => {
-    const r = searchParams.get('renewalConfirmation');
-    if (!r || r === 'all') return [];
-    return r.split(',').filter(Boolean);
-  });
-  const [invoiceFilter, setInvoiceFilter] = useState(() => {
-    const i = searchParams.get('invoiceStatus');
-    if (!i || i === 'all') return [];
-    return i.split(',').filter(Boolean);
-  });
-  const [paymentFilter, setPaymentFilter] = useState(() => {
-    const p = searchParams.get('paymentStatus');
-    if (!p || p === 'all') return [];
-    return p.split(',').filter(Boolean);
-  });
-  const [clientFilter, setClientFilter] = useState(() => {
-    const c = searchParams.get('clientName');
-    if (!c || c === 'all') return [];
-    return c.split(',').filter(Boolean);
-  });
-  const [serviceFilter, setServiceFilter] = useState(() => {
-    const s = searchParams.get('serviceName');
-    if (!s || s === 'all') return [];
-    return s.split(',').filter(Boolean);
-  });
+
+  // Derived filter state directly from URL searchParams (single source of truth)
+  const search = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+
+  const dateRangeParam = searchParams.get('dateRange') || '';
+  const dateRangeFilter = useMemo(() => {
+    return !dateRangeParam || dateRangeParam === 'all' ? [] : dateRangeParam.split(',').filter(Boolean);
+  }, [dateRangeParam]);
+
+  const valueParam = searchParams.get('valueRange') || '';
+  const valueFilter = useMemo(() => {
+    return !valueParam || valueParam === 'all' ? [] : valueParam.split(',').filter(Boolean);
+  }, [valueParam]);
+
+  const statusColParam = searchParams.get('statusCol') || '';
+  const statusColFilter = useMemo(() => {
+    return !statusColParam || statusColParam === 'all' ? [] : statusColParam.split(',').filter(Boolean);
+  }, [statusColParam]);
+
+  const renewedParam = searchParams.get('renewalConfirmation') || '';
+  const renewedFilter = useMemo(() => {
+    return !renewedParam || renewedParam === 'all' ? [] : renewedParam.split(',').filter(Boolean);
+  }, [renewedParam]);
+
+  const invoiceParam = searchParams.get('invoiceStatus') || '';
+  const invoiceFilter = useMemo(() => {
+    return !invoiceParam || invoiceParam === 'all' ? [] : invoiceParam.split(',').filter(Boolean);
+  }, [invoiceParam]);
+
+  const paymentParam = searchParams.get('paymentStatus') || '';
+  const paymentFilter = useMemo(() => {
+    return !paymentParam || paymentParam === 'all' ? [] : paymentParam.split(',').filter(Boolean);
+  }, [paymentParam]);
+
+  const clientParam = searchParams.get('clientName') || '';
+  const clientFilter = useMemo(() => {
+    return !clientParam || clientParam === 'all' ? [] : clientParam.split(',').filter(Boolean);
+  }, [clientParam]);
+
+  const serviceParam = searchParams.get('serviceName') || '';
+  const serviceFilter = useMemo(() => {
+    return !serviceParam || serviceParam === 'all' ? [] : serviceParam.split(',').filter(Boolean);
+  }, [serviceParam]);
 
   const [openFilterCol, setOpenFilterCol] = useState(null); // which column dropdown is open
   const [filterPos, setFilterPos] = useState({ top: 0, left: 0 });
   const filterRef = useRef(null);
-  const isInternalUpdateRef = useRef(false);
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
 
-  // Sync state when URL searchParams change externally (e.g. browser back/forward or navigation links)
-  useEffect(() => {
-    if (isInternalUpdateRef.current) {
-      isInternalUpdateRef.current = false;
-      return;
-    }
-
-    const s = searchParams.get('search') || '';
-    if (s !== search) setSearch(s);
-
-    const status = searchParams.get('status') || 'all';
-    if (status !== statusFilter) setStatusFilter(status);
-
-    const d = searchParams.get('dateRange') || 'all';
-    const dateArr = d === 'all' ? [] : d.split(',').filter(Boolean);
-    if (dateArr.join(',') !== dateRangeFilter.join(',')) setDateRangeFilter(dateArr);
-
-    const v = searchParams.get('valueRange') || 'all';
-    const valArr = v === 'all' ? [] : v.split(',').filter(Boolean);
-    if (valArr.join(',') !== valueFilter.join(',')) setValueFilter(valArr);
-
-    const stCol = searchParams.get('statusCol') || 'all';
-    const stColArr = stCol === 'all' ? [] : stCol.split(',').filter(Boolean);
-    if (stColArr.join(',') !== statusColFilter.join(',')) setStatusColFilter(stColArr);
-
-    const renConf = searchParams.get('renewalConfirmation') || 'all';
-    const renArr = renConf === 'all' ? [] : renConf.split(',').filter(Boolean);
-    if (renArr.join(',') !== renewedFilter.join(',')) setRenewedFilter(renArr);
-
-    const inv = searchParams.get('invoiceStatus') || 'all';
-    const invArr = inv === 'all' ? [] : inv.split(',').filter(Boolean);
-    if (invArr.join(',') !== invoiceFilter.join(',')) setInvoiceFilter(invArr);
-
-    const pay = searchParams.get('paymentStatus') || 'all';
-    const payArr = pay === 'all' ? [] : pay.split(',').filter(Boolean);
-    if (payArr.join(',') !== paymentFilter.join(',')) setPaymentFilter(payArr);
-
-    const clientN = searchParams.get('clientName') || '';
-    const clientArr = clientN === '' ? [] : clientN.split(',').filter(Boolean);
-    if (clientArr.join(',') !== clientFilter.join(',')) setClientFilter(clientArr);
-
-    const servN = searchParams.get('serviceName') || 'all';
-    const servArr = servN === 'all' ? [] : servN.split(',').filter(Boolean);
-    if (servArr.join(',') !== serviceFilter.join(',')) setServiceFilter(servArr);
-  }, [searchParams]);
-
-  // Sync URL searchParams when local state filters change, preserving any non-filter query parameters
-  const updateUrlFilters = useCallback((filters) => {
-    const current = searchParamsRef.current;
-    const params = new URLSearchParams(current);
-
-    if (filters.search) params.set('search', filters.search);
-    else params.delete('search');
-
-    if (filters.statusFilter && filters.statusFilter !== 'all') params.set('status', filters.statusFilter);
-    else params.delete('status');
-
-    if (Array.isArray(filters.dateRangeFilter) && filters.dateRangeFilter.length > 0) {
-      params.set('dateRange', filters.dateRangeFilter.join(','));
-    } else {
-      params.delete('dateRange');
-    }
-
-    if (Array.isArray(filters.valueFilter) && filters.valueFilter.length > 0) {
-      params.set('valueRange', filters.valueFilter.join(','));
-    } else {
-      params.delete('valueRange');
-    }
-
-    if (Array.isArray(filters.statusColFilter) && filters.statusColFilter.length > 0) {
-      params.set('statusCol', filters.statusColFilter.join(','));
-    } else {
-      params.delete('statusCol');
-    }
-
-    if (Array.isArray(filters.renewedFilter) && filters.renewedFilter.length > 0) {
-      params.set('renewalConfirmation', filters.renewedFilter.join(','));
-    } else {
-      params.delete('renewalConfirmation');
-    }
-
-    if (Array.isArray(filters.invoiceFilter) && filters.invoiceFilter.length > 0) {
-      params.set('invoiceStatus', filters.invoiceFilter.join(','));
-    } else {
-      params.delete('invoiceStatus');
-    }
-
-    if (Array.isArray(filters.paymentFilter) && filters.paymentFilter.length > 0) {
-      params.set('paymentStatus', filters.paymentFilter.join(','));
-    } else {
-      params.delete('paymentStatus');
-    }
-
-    if (Array.isArray(filters.clientFilter) && filters.clientFilter.length > 0) {
-      params.set('clientName', filters.clientFilter.join(','));
-    } else {
-      params.delete('clientName');
-    }
-
-    if (Array.isArray(filters.serviceFilter) && filters.serviceFilter.length > 0) {
-      params.set('serviceName', filters.serviceFilter.join(','));
-    } else {
-      params.delete('serviceName');
-    }
-
-    if (params.toString() !== current.toString()) {
-      isInternalUpdateRef.current = true;
-      setSearchParams(params, { replace: true });
-    }
+  // Unified updater for URL searchParams, preserving unrelated parameters
+  const updateFilter = useCallback((key, value) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (!value || value === 'all' || (Array.isArray(value) && value.length === 0)) {
+        next.delete(key);
+      } else if (Array.isArray(value)) {
+        next.set(key, value.join(','));
+      } else {
+        next.set(key, String(value));
+      }
+      return next;
+    }, { replace: true });
+    setPage(1);
   }, [setSearchParams]);
 
+  // Setters compatible with table column filter popups and buttons
+  const setDateRangeFilter = useCallback((val) => {
+    updateFilter('dateRange', typeof val === 'function' ? val(dateRangeFilter) : val);
+  }, [updateFilter, dateRangeFilter]);
+
+  const setValueFilter = useCallback((val) => {
+    updateFilter('valueRange', typeof val === 'function' ? val(valueFilter) : val);
+  }, [updateFilter, valueFilter]);
+
+  const setStatusColFilter = useCallback((val) => {
+    updateFilter('statusCol', typeof val === 'function' ? val(statusColFilter) : val);
+  }, [updateFilter, statusColFilter]);
+
+  const setRenewedFilter = useCallback((val) => {
+    updateFilter('renewalConfirmation', typeof val === 'function' ? val(renewedFilter) : val);
+  }, [updateFilter, renewedFilter]);
+
+  const setInvoiceFilter = useCallback((val) => {
+    updateFilter('invoiceStatus', typeof val === 'function' ? val(invoiceFilter) : val);
+  }, [updateFilter, invoiceFilter]);
+
+  const setPaymentFilter = useCallback((val) => {
+    updateFilter('paymentStatus', typeof val === 'function' ? val(paymentFilter) : val);
+  }, [updateFilter, paymentFilter]);
+
+  const setClientFilter = useCallback((val) => {
+    updateFilter('clientName', typeof val === 'function' ? val(clientFilter) : val);
+  }, [updateFilter, clientFilter]);
+
+  const setServiceFilter = useCallback((val) => {
+    updateFilter('serviceName', typeof val === 'function' ? val(serviceFilter) : val);
+  }, [updateFilter, serviceFilter]);
+
+  const setStatusFilter = useCallback((val) => {
+    updateFilter('status', typeof val === 'function' ? val(statusFilter) : val);
+  }, [updateFilter, statusFilter]);
+
+  // Local state for smooth search bar typing, debounced into URL searchParams
+  const [searchInput, setSearchInput] = useState(search);
   useEffect(() => {
-    updateUrlFilters({
-      search,
-      statusFilter,
-      dateRangeFilter,
-      valueFilter,
-      statusColFilter,
-      renewedFilter,
-      invoiceFilter,
-      paymentFilter,
-      clientFilter,
-      serviceFilter
-    });
-  }, [
-    search,
-    statusFilter,
-    dateRangeFilter,
-    valueFilter,
-    statusColFilter,
-    renewedFilter,
-    invoiceFilter,
-    paymentFilter,
-    clientFilter,
-    serviceFilter,
-    updateUrlFilters
-  ]);
-  
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) {
+        updateFilter('search', searchInput);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, search, updateFilter]);
+
+  const setSearch = useCallback((val) => {
+    const cleanVal = typeof val === 'function' ? val(search) : val;
+    setSearchInput(cleanVal || '');
+    updateFilter('search', cleanVal || '');
+  }, [search, updateFilter]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      const filterKeys = ['search', 'status', 'dateRange', 'valueRange', 'statusCol', 'renewalConfirmation', 'invoiceStatus', 'paymentStatus', 'clientName', 'serviceName'];
+      filterKeys.forEach(k => next.delete(k));
+      return next;
+    }, { replace: true });
+    setSearchInput('');
+    setPage(1);
+  }, [setSearchParams]);
+
   // Update URL and local state when status changes
   const handleStatusChange = (newStatus) => {
     setStatusFilter(newStatus);
@@ -1916,21 +1860,9 @@ export default function RenewalsList() {
             <input
               type="text"
               placeholder="Search client name or reference..."
-              value={search}
+              value={searchInput}
               onChange={(e) => {
-                // PERF/BUG: this used to also call a raw setSearchParams(prev
-                // => {...}) here on every keystroke, with no `replace` option
-                // — React Router pushes a new history entry by default, so
-                // typing "abc" filled 3 browser-history entries (breaking
-                // Back — it would replay one character at a time) and did a
-                // full URL-write + route re-evaluation per keystroke. That
-                // work was also 100% redundant: the effect below (watching
-                // `search` among other filters) already calls
-                // updateUrlFilters, which does the same sync correctly with
-                // replace:true and skips the write entirely when the URL
-                // wouldn't actually change.
-                const val = e.target.value;
-                setSearch(val);
+                setSearchInput(e.target.value);
                 setPage(1);
               }}
               className="input-field pl-8 w-full text-xs py-1.5 bg-white dark:bg-surface-800 text-zinc-900 dark:text-white"
@@ -2207,19 +2139,7 @@ export default function RenewalsList() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setSearch('');
-              setStatusFilter('all');
-              setClientFilter([]);
-              setServiceFilter([]);
-              setDateRangeFilter([]);
-              setValueFilter([]);
-              setStatusColFilter([]);
-              setRenewedFilter([]);
-              setInvoiceFilter([]);
-              setPaymentFilter([]);
-              setPage(1);
-            }}
+            onClick={clearAllFilters}
             className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 flex-shrink-0 cursor-pointer"
           >
             Clear All Filters
@@ -2600,15 +2520,7 @@ export default function RenewalsList() {
                       title="No renewal records found"
                       description="No renewals match your current filter and search criteria. Try adjusting or clearing your filters."
                       actionText="Reset Filters"
-                      onAction={() => {
-                        setSearch('');
-                        setSelectedService('all');
-                        setSelectedDateFilter('all');
-                        setSelectedStatus('all');
-                        setCustomStartDate('');
-                        setCustomEndDate('');
-                        setSearchParams(new URLSearchParams());
-                      }}
+                      onAction={clearAllFilters}
                     />
                   </td>
                 </tr>
