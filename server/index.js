@@ -57,6 +57,7 @@ import userActivityRoutes from './routes/userActivity.js';
 import analyticsRoutes from './routes/analytics.js';
 import automationRoutes from './routes/automation.js';
 import pricingRoutes from './routes/pricing.js';
+import ceoRoutes from './routes/ceo.js';
 import { startScheduler } from './services/scheduler.js';
 
 dotenv.config();
@@ -76,12 +77,31 @@ try {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://static.cloudflareinsights.com'], // Required for Vite SPA bundles, Leaflet & Cloudflare Insights
+        // 'unsafe-inline' on frame-src's inherited srcdoc context, plus the CDN
+        // hosts below, are required for the TopologyField decorative effect
+        // (src/components/ui/topology-field.jsx), which renders a sandboxed
+        // srcDoc iframe pulling Tailwind's play CDN, Iconify, and three.js.
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://unpkg.com',
+          'https://static.cloudflareinsights.com',
+          'https://cdn.tailwindcss.com',
+          'https://code.iconify.design',
+          'https://cdnjs.cloudflare.com',
+        ], // Required for Vite SPA bundles, Leaflet, Cloudflare Insights & TopologyField's iframe
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://unpkg.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://unpkg.com'],
-        connectSrc: ["'self'", 'https://cloudflareinsights.com', 'https://static.cloudflareinsights.com'],
-        frameSrc: ["'none'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://unpkg.com', 'https://cdn.21st.dev'],
+        connectSrc: [
+          "'self'",
+          'https://cloudflareinsights.com',
+          'https://static.cloudflareinsights.com',
+          'https://api.iconify.design',
+          'https://api.simplesvg.com',
+          'https://api.unisvg.com',
+        ], // api.iconify.design (+ fallback hosts) is fetched at runtime by the iconify-icon web component
+        frameSrc: ["'self'"], // TopologyField's srcDoc iframe is same-origin
         objectSrc: ["'none'"],
         upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
       },
@@ -214,12 +234,14 @@ app.use('/api/visits', visitRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/users', userActivityRoutes);
+app.use('/api/user-activity', userActivityRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/services', servicesRouter);
 app.use('/api/automation', automationRoutes);
 app.use('/api/tiles', tilesRoutes);
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/ceo', ceoRoutes);
 
 // Client-side error telemetry — sanitized to prevent log injection
 app.post('/api/log-error', express.json({ limit: '10kb' }), (req, res) => {

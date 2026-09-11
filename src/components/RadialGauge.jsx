@@ -4,7 +4,7 @@ export default function RadialGauge({
   percent = 0,
   label,
   sublabel,
-  color = '#6366f1',
+  color = '#a559a5',
   size = 132,
   stroke = 10,
 }) {

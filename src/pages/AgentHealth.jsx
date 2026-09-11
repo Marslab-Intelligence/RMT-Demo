@@ -39,7 +39,7 @@ export default function AgentHealth() {
   }, []);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-28">
+    <div className="space-y-6 w-full pb-28">
       <div className="flex items-center justify-between glass-card p-6 rounded-2xl border border-rose-500/20 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-rose-500 to-amber-500 rounded-xl text-white shadow-lg shadow-rose-500/20">

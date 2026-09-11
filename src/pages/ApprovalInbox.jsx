@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Mail, RefreshCw } fr
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import EmptyState from '../components/common/EmptyState';
+import PageHeader from '../components/common/PageHeader';
 
 export default function ApprovalInbox() {
   const { getValidToken } = useAuth();
@@ -63,16 +64,27 @@ export default function ApprovalInbox() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-28">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-card p-6 rounded-2xl border border-amber-500/20 shadow-xl">
+    <div className="space-y-6 w-full pb-28">
+      {/* Standard Enterprise Page Header */}
+      <PageHeader
+        title="AI Agent & Manager Approval Inbox"
+        subtitle="Review, sign-off, and approve agent-authored client communications, special pricing exceptions, and proposed workflow actions"
+        backTo="/"
+        backLabel="Back to Dashboard"
+        breadcrumbs={['Operations', 'Approval Inbox']}
+        badge="Manager Review"
+        badgeColor="amber"
+      />
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-card p-4 rounded-2xl border border-amber-500/20 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-amber-500 to-rose-500 rounded-xl text-white shadow-lg shadow-amber-500/20">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="p-2.5 bg-gradient-to-br from-amber-500 to-rose-500 rounded-xl text-white shadow-md shadow-amber-500/20">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">AI Agent Approval Inbox</h1>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Review Decisions Filter</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Review and approve agent-authored client drafts and proposed workflow actions
+              Filter queue by resolution status
             </p>
           </div>
         </div>

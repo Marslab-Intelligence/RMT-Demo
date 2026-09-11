@@ -5,6 +5,24 @@ import { computeUserPerformance } from '../utils/userMetrics.js';
 
 const router = Router();
 
+// GET /api/user-activity/recent — recent system activity logs
+router.get('/recent', authenticateToken, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+    const { rows } = await db.query(`
+      SELECT al.*, u.full_name, u.role
+      FROM activity_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      ORDER BY al.created_at DESC
+      LIMIT $1
+    `, [limit]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[Recent activity logs error]', err);
+    res.status(500).json({ error: 'Failed to fetch recent activity logs.' });
+  }
+});
+
 // GET /api/users/:id/activity — a single user's performance metrics (same
 // definitions as GET /api/departments/:id/users, computed via the same
 // shared helper so the two views can never disagree) plus a recent-activity

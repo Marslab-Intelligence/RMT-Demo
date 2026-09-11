@@ -23,7 +23,7 @@
 
 export function isRecordVisibleToUser(record, user) {
   if (!record || !user) return false;
-  if (user.role === 'super_admin') return true;
+  if (user.role === 'super_admin' || user.role === 'ceo') return true;
   if (user.role === 'dept_admin') {
     return record.department_id != null && record.department_id === user.departmentId;
   }
@@ -55,7 +55,7 @@ export function assertRecordVisible(record, user, res) {
  */
 export function buildScopeClause(user, nextParamIndex, tableAlias = '') {
   const p = tableAlias ? `${tableAlias}.` : '';
-  if (user.role === 'super_admin') return { clause: '', params: [] };
+  if (user.role === 'super_admin' || user.role === 'ceo') return { clause: '', params: [] };
   if (user.role === 'dept_admin') {
     return {
       clause: ` AND ${p}department_id = $${nextParamIndex}`,
@@ -78,7 +78,7 @@ export function buildScopeClause(user, nextParamIndex, tableAlias = '') {
  * sometimes include ids the UI never should have offered).
  */
 export async function filterIdsByScope(db, ids, user) {
-  if (user.role === 'super_admin') return ids;
+  if (user.role === 'super_admin' || user.role === 'ceo') return ids;
   if (user.role === 'dept_admin') {
     const { rows } = await db.query(
       `SELECT id FROM renewals WHERE id = ANY($1) AND department_id = $2`,

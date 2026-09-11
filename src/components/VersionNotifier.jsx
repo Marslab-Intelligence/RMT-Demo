@@ -63,7 +63,7 @@ export default function VersionNotifier() {
   return (
     <div className="fixed top-0 inset-x-0 z-[9999] pointer-events-auto">
       <div className="bg-gradient-to-r from-amber-600 via-rose-600 to-indigo-600 text-white px-4 py-3 shadow-2xl border-b border-white/20">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="w-full px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 backdrop-blur-md rounded-xl flex-shrink-0 animate-pulse">
               <Sparkles className="w-5 h-5 text-amber-200" />

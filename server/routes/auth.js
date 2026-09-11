@@ -92,8 +92,8 @@ async function issueRefreshToken(userId) {
 function setRefreshCookie(res, refreshToken) {
   res.cookie('rmt_refresh_token', refreshToken, {
     httpOnly: true,          // Not accessible by JavaScript
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: 'strict',      // CSRF protection
+    secure: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL?.startsWith('https'), // HTTPS only if production domain is https
+    sameSite: 'lax',         // Allow top-level navigation within the app
     maxAge: 10 * 365 * 24 * 60 * 60 * 1000, // 10 years in ms
     path: '/api/auth',       // Only sent to auth endpoints
   });
@@ -217,7 +217,14 @@ if (DEMO_MODE) {
          LEFT JOIN departments d ON u.department_id = d.id
          LEFT JOIN categories c ON u.category_id = c.id
          WHERE u.is_active = TRUE
-         ORDER BY u.role, u.full_name`
+         ORDER BY 
+           CASE 
+             WHEN u.role = 'ceo' THEN 0 
+             WHEN u.role = 'super_admin' THEN 1 
+             WHEN u.role = 'dept_admin' THEN 2 
+             ELSE 3 
+           END, 
+           u.full_name`
       );
       res.json(rows);
     } catch (err) {

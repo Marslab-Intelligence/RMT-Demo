@@ -32,6 +32,16 @@ export async function authenticateToken(req, res, next) {
     }
 
     req.user = decoded;
+
+    // CEO Security Barrier: strictly read-only for operational mutations
+    if (req.user.role === 'ceo' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const allowedPaths = ['/api/auth/logout', '/api/auth/refresh', '/api/ceo/intelligence/query'];
+      const isAllowed = allowedPaths.some(p => (req.originalUrl || '').startsWith(p));
+      if (!isAllowed) {
+        return res.status(403).json({ error: 'Forbidden: CEO role has strictly read-only access. Operational mutations are not permitted.' });
+      }
+    }
+
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired token.' });

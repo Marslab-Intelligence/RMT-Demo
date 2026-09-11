@@ -265,7 +265,7 @@ export default function EmailAutomation() {
 
     switch (normalized) {
       case '30_day_reminder': return { label: '📧 30-Day Reminder', color: 'bg-blue-200 text-[#000000] border-blue-500 font-black', style: { backgroundColor: '#dbeafe', color: '#000000', borderColor: '#2563eb', fontWeight: '900' } };
-      case '20_day_reminder': return { label: '📧 20-Day Reminder', color: 'bg-indigo-200 text-[#000000] border-indigo-500 font-black', style: { backgroundColor: '#e0e7ff', color: '#000000', borderColor: '#4f46e5', fontWeight: '900' } };
+      case '20_day_reminder': return { label: '📧 20-Day Reminder', color: 'bg-indigo-200 text-[#000000] border-indigo-500 font-black', style: { backgroundColor: '#e0e7ff', color: '#000000', borderColor: '#4b154c', fontWeight: '900' } };
       case '15_day_reminder': return { label: '📧 15-Day Reminder', color: 'bg-amber-200 text-[#000000] border-amber-500 font-black', style: { backgroundColor: '#fef3c7', color: '#000000', borderColor: '#d97706', fontWeight: '900' } };
       case '10_day_reminder': return { label: '📧 10-Day Reminder', color: 'bg-orange-200 text-[#000000] border-orange-500 font-black', style: { backgroundColor: '#ffedd5', color: '#000000', borderColor: '#ea580c', fontWeight: '900' } };
       case '5_day_reminder':  return { label: '📧 5-Day Reminder',  color: 'bg-rose-200 text-[#000000] border-rose-500 font-black', style: { backgroundColor: '#ffe4e6', color: '#000000', borderColor: '#e11d48', fontWeight: '900' } };
@@ -295,7 +295,7 @@ export default function EmailAutomation() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in pb-12">
+    <div className="space-y-6 w-full animate-fade-in pb-12">
       {/* Header / Intro */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

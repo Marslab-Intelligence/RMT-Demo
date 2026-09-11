@@ -7,13 +7,13 @@ import { Maximize2 } from 'lucide-react';
 
 // Vibrant glassmorphic palette
 const CATEGORY_COLORS = [
-  '#3b82f6', // Vivid Blue (Microsoft 365)
+  '#611c69', // Vivid Blue (Microsoft 365)
   '#10b981', // Emerald Mint (Cloud & IT)
   '#8b5cf6', // Deep Purple (SSL Security)
   '#f59e0b', // Amber Gold (AWS Enterprise)
   '#ec4899', // Hot Pink (Domains & DNS)
   '#06b6d4', // Cyan (Google Workspace)
-  '#6366f1', // Indigo (Cloud Backup)
+  '#a559a5', // Indigo (Cloud Backup)
   '#f97316', // Orange (Endpoint Security)
 ];
 
@@ -315,10 +315,24 @@ export default function ServiceDistributionPieChart({
           <span className="text-xl font-mono font-black text-black dark:text-white leading-none">
             {activeCount}
           </span>
-          <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block mt-0.5 truncate max-w-[75px]">
-            {selectedSubProduct || selectedService || 'Total'}
-          </span>
+          {!(selectedSubProduct || selectedService) && (
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block mt-0.5">
+              Total
+            </span>
+          )}
         </div>
+
+        {/* Selected slice name — shown to the side, inside the chart box, never truncated */}
+        {(selectedSubProduct || selectedService) && (
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 max-w-[38%] text-right pointer-events-none">
+            <div className="text-xs font-black text-black dark:text-white leading-tight break-words">
+              {selectedSubProduct || selectedService}
+            </div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold font-mono mt-0.5">
+              {activeCount} Units
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sleek Perfectly Aligned Legend Pills */}

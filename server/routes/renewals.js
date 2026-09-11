@@ -9,6 +9,7 @@ import { renewalExpiredAdminEmail } from '../templates/emailTemplates.js';
 import jwt from 'jsonwebtoken';
 import { registerClient, broadcastEvent } from '../services/realtime.js';
 import { assertRecordVisible, fetchAndCheckScope, filterIdsByScope, buildScopeClause, isAdminLike } from '../utils/scope.js';
+import { intelligenceCache } from '../services/intelligence/intelligenceCache.js';
 
 // SECURITY: Escape HTML entities to prevent XSS in user-generated content
 function escapeHtml(str) {
@@ -89,6 +90,18 @@ async function resolveScopeForCreate(req, res, bodyDepartmentId, bodyCategoryId)
 }
 
 const router = Router();
+
+// Automatically invalidate intelligence cache on mutations
+router.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        intelligenceCache.invalidate();
+      }
+    });
+  }
+  next();
+});
 
 // Real-time Event Stream for live UI updates
 router.get('/events', registerClient);
@@ -488,6 +501,21 @@ router.post('/trigger-scheduler', authenticateToken, requireRole('super_admin', 
   } catch (err) {
     console.error('Manual scheduler trigger error:', err);
     res.status(500).json({ error: 'Failed to trigger scheduler.' });
+  }
+});
+
+// Get trash count - Admin only
+router.get('/trash/count', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
+  try {
+    const scope = buildScopeClause(req.user, 1);
+    const { rows } = await db.query(`
+      SELECT COUNT(*)::int as count FROM trash_renewals
+      WHERE 1=1 ${scope.clause}
+    `, scope.params);
+    res.json({ count: rows[0]?.count || 0 });
+  } catch (err) {
+    console.error('Fetch trash count error:', err);
+    res.status(500).json({ error: 'Failed to fetch trash count.' });
   }
 });
 

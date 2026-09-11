@@ -8,6 +8,8 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const refreshTimerRef = useRef(null);
 
+  const inFlightRefreshRef = useRef(null);
+
   // Keep a ref of the token to use inside timers and callbacks without closures issues
   const tokenRef = useRef(null);
   tokenRef.current = token;
@@ -43,8 +45,8 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    console.log(`🔄 Access token refresh scheduled in ${Math.round(msUntilRefresh / 1000 / 60)} minutes`);
     refreshTimerRef.current = setTimeout(() => {
+      console.log('⏰ Scheduled token refresh triggered');
       silentRefresh();
     }, msUntilRefresh);
   }, []);
@@ -52,31 +54,42 @@ export const AuthProvider = ({ children }) => {
   // ─────────────────────────────────────────────
   // Silent refresh: call /api/auth/refresh
   // The HttpOnly cookie is sent automatically by the browser
+  // Deduplicated so concurrent calls share a single request
   // ─────────────────────────────────────────────
   const silentRefresh = useCallback(async () => {
-    try {
-      const res = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        credentials: 'include', // sends the HttpOnly cookie
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setToken(data.token);
-        setUser(data.user);
-        scheduleRefresh(data.token);
-        console.log('✅ Token silently refreshed');
-        return data.token;
-      } else {
-        // Refresh token revoked or invalid (HTTP 401/403) — log out
-        console.warn('⚠️ Silent refresh unauthorized — logging out');
-        logout();
-        return null;
-      }
-    } catch (err) {
-      console.warn('⚠️ Silent refresh network error (preserving session):', err.message);
-      return null;
+    if (inFlightRefreshRef.current) {
+      return inFlightRefreshRef.current;
     }
+
+    inFlightRefreshRef.current = (async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'include', // sends the HttpOnly cookie
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setToken(data.token);
+          setUser(data.user);
+          scheduleRefresh(data.token);
+          console.log('✅ Token silently refreshed');
+          return data.token;
+        } else {
+          // Refresh token revoked or invalid (HTTP 401/403) — log out
+          console.warn('⚠️ Silent refresh unauthorized — logging out');
+          logout();
+          return null;
+        }
+      } catch (err) {
+        console.warn('⚠️ Silent refresh network error (preserving session):', err.message);
+        return null;
+      } finally {
+        inFlightRefreshRef.current = null;
+      }
+    })();
+
+    return inFlightRefreshRef.current;
   }, [scheduleRefresh]);
 
   // ─────────────────────────────────────────────

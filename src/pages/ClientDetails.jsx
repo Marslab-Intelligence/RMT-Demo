@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, getStatusColor, getDaysLeftColor } from '../utils/formatters';
 import toast from 'react-hot-toast';
+import PageHeader from '../components/common/PageHeader';
 import RenewalForm from '../components/RenewalForm';
 import EmptyState from '../components/common/EmptyState';
 import RadialGauge from '../components/RadialGauge';
@@ -230,24 +231,28 @@ export default function ClientDetails() {
   const percentPaid = valueVal > 0 ? Math.round((paymentAmt / valueVal) * 100) : 0;
 
   return (
-    <div className="animate-fade-in max-w-7xl mx-auto h-[calc(100vh-6.5rem)] flex flex-col overflow-hidden">
-      {/* Header / Navigation */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <button
-          onClick={handleBack}
-          className="btn-secondary flex items-center gap-2 py-1.5 px-3 text-xs"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Renewals
-        </button>
-        {canEdit && (
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="btn-primary flex items-center gap-2 py-1.5 px-3 text-xs"
-          >
-            <Edit3 className="w-3.5 h-3.5" /> Edit Record
-          </button>
-        )}
-      </div>
+    <div className="animate-fade-in w-full h-[calc(100vh-6.5rem)] flex flex-col overflow-hidden space-y-4">
+      {/* Standard Enterprise Page Header */}
+      <PageHeader
+        title={client.client_name || 'Renewal Account Details'}
+        subtitle={`Contract reference ${client.unique_id || ''} • Managed by ${client.owner || 'Unassigned'}`}
+        backTo="/renewals"
+        backLabel="Back to Renewals"
+        breadcrumbs={['Dashboard', 'Renewals', client.client_name]}
+        badge={client.status}
+        badgeColor={client.status === 'Active' ? 'emerald' : client.status === 'Expired' ? 'rose' : 'amber'}
+        actions={
+          canEdit && (
+            <button
+              onClick={() => setIsFormOpen(true)}
+              className="btn-primary flex items-center gap-2 py-1.5 px-3.5 text-xs rounded-xl shadow-xs"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Record</span>
+            </button>
+          )
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start flex-1 min-h-0">
         {/* ── Left: sticky identity rail ── */}

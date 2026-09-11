@@ -1167,7 +1167,7 @@ function AdminVisitModule({ token, user }) {
         .filter(pt => !isNaN(pt[0]) && !isNaN(pt[1]));
 
       if (latlngs.length > 0) {
-        L.polyline(latlngs, { color: '#6366f1', weight: 5, opacity: 0.85 }).addTo(map);
+        L.polyline(latlngs, { color: '#a559a5', weight: 5, opacity: 0.85 }).addTo(map);
         const bounds = L.latLngBounds(latlngs);
         map.fitBounds(bounds, { padding: [40, 40] });
       }

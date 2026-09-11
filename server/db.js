@@ -446,7 +446,7 @@ export const initDb = async () => {
     await pool.query(`
       UPDATE users SET role = 'sales' WHERE role = 'finance';
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user'));
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user', 'ceo'));
 
       UPDATE email_logs SET recipient_type = 'sales' WHERE recipient_type = 'finance';
       ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_recipient_type_check;
@@ -482,7 +482,7 @@ export const initDb = async () => {
     await pool.query(`
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
       ALTER TABLE users ADD CONSTRAINT users_role_check
-        CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user'));
+        CHECK(role IN ('sales', 'admin', 'super_admin', 'dept_admin', 'user', 'ceo'));
     `);
 
     await pool.query(`
@@ -568,8 +568,18 @@ export const initDb = async () => {
     // constraint — done last on purpose (see comment above).
     await pool.query(`
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('super_admin', 'dept_admin', 'user'));
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('super_admin', 'dept_admin', 'user', 'ceo'));
     `);
+
+    // Seed CEO demo user if not present
+    const { rows: ceoExists } = await pool.query("SELECT 1 FROM users WHERE role = 'ceo' OR email = 'ceo.demo@marslab.work'");
+    if (ceoExists.length === 0) {
+      const ceoPassHash = await bcrypt.hash('admin123', 10);
+      await pool.query(`
+        INSERT INTO users (username, email, password, full_name, role, avatar_color, is_active)
+        VALUES ('ceo.demo', 'ceo.demo@marslab.work', $1, 'Executive Leadership', 'ceo', '#0ea5e9', TRUE)
+      `, [ceoPassHash]);
+    }
 
     // Create automation settings & log tables
     await pool.query(`

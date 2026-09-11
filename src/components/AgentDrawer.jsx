@@ -469,19 +469,6 @@ export default function AgentDrawer() {
               <Sparkles className="w-3 h-3" />
               <span>Daily Sweep</span>
             </button>
-            <button
-              onClick={handleGuardianHealth}
-              disabled={isProcessing}
-              className="agent-chip"
-              style={{
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.15)',
-                color: '#10b981',
-              }}
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span>Guardian Health</span>
-            </button>
           </div>
 
           {/* ── Chat Messages ── */}

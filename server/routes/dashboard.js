@@ -168,8 +168,10 @@ router.get('/activity-logs', authenticateToken, requireRole('super_admin', 'dept
       params.push(req.user.departmentId);
     }
     const { rows } = await db.query(`
-      SELECT al.*, u.full_name, u.role FROM activity_logs al
+      SELECT al.*, u.full_name, u.role, u.email, u.avatar_color, u.department_id, d.name as department_name
+      FROM activity_logs al
       LEFT JOIN users u ON al.user_id = u.id
+      LEFT JOIN departments d ON u.department_id = d.id
       ${deptClause}
       ORDER BY al.created_at DESC LIMIT $1
     `, params);
@@ -393,12 +395,20 @@ router.get('/charts/services', authenticateToken, async (req, res) => {
       ORDER BY count DESC
     `, scope.params);
 
+    const rScope = buildScopeClause(req.user, 1, 'r');
     const { rows: allRecords } = await db.query(`
-      SELECT id, unique_id, service, client_name, value, status, renewal_date AS expiry_date, renewal_date, vendor, purchase_cost, profit, owner, client_email, sales_email, contact_number, invoice_number, quotation_number, reference_id, plan_period, payment_status, edit_status, expiry_reason
-      FROM renewals
-      WHERE is_deleted = false AND service IS NOT NULL AND service != '' ${scope.clause}
-      ORDER BY renewal_date ASC
-    `, scope.params);
+      SELECT 
+        r.id, r.unique_id, r.service, r.client_name, r.value, r.status, 
+        r.renewal_date AS expiry_date, r.renewal_date, r.vendor, r.purchase_cost, 
+        r.profit, r.owner, r.client_email, r.sales_email, r.contact_number, 
+        r.invoice_number, r.quotation_number, r.reference_id, r.plan_period, 
+        r.payment_status, r.edit_status, r.expiry_reason,
+        r.department_id, COALESCE(d.name, 'General Operations') AS department_name
+      FROM renewals r
+      LEFT JOIN departments d ON r.department_id = d.id
+      WHERE r.is_deleted = false AND r.service IS NOT NULL AND r.service != '' ${rScope.clause}
+      ORDER BY r.renewal_date ASC
+    `, rScope.params);
 
     res.json({
       summary: rows,

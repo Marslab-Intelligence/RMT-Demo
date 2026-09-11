@@ -268,7 +268,7 @@ export default function ClientDetailsModal({ client, onClose }) {
     /* z-index sits above the report drilldown (z-100000), which is why the
        detail view used to open behind it. */
     <div
-      className="fixed inset-0 z-[100010] flex flex-col bg-surface-50 dark:bg-[#0c0a12]"
+      className="fixed inset-0 z-[100010] flex flex-col bg-surface-50 dark:bg-[#060a13]"
       role="dialog"
       aria-modal="true"
       aria-label={`Full details for ${c.client_name}`}
@@ -375,7 +375,7 @@ export default function ClientDetailsModal({ client, onClose }) {
           </div>
         )}
 
-        <div className="max-w-6xl mx-auto space-y-5">
+        <div className="w-full space-y-5">
           {tab === 'overview' && (
             <>
               <Section icon={Info} title="Identification">

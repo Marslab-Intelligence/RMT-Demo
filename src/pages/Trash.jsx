@@ -143,34 +143,36 @@ export default function Trash() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300 pb-28">
+    <div className="space-y-6 w-full animate-in fade-in slide-in-from-bottom-4 duration-300 pb-28">
       
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => navigate('/renewals')}
-              className="p-1.5 hover:bg-white/40 dark:hover:bg-white/5 rounded-lg transition-colors text-surface-500 hover:text-surface-700 dark:hover:text-white"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-rose-600 dark:from-amber-400 dark:to-rose-400">
-              Trash Bin (Admin Only)
-            </h1>
-          </div>
+          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-rose-600 dark:from-amber-400 dark:to-rose-400">
+            Trash Bin (Admin Only)
+          </h1>
           <p className="text-sm text-surface-500 dark:text-surface-400">
             View, restore, or permanently delete records that have been deleted.
           </p>
         </div>
 
-        <button
-          onClick={fetchTrash}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-surface-700 dark:text-surface-300 hover:bg-white/40 dark:hover:bg-white/5 rounded-xl border border-surface-200 dark:border-surface-800 transition-all"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Trash
-        </button>
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+          <button
+            onClick={fetchTrash}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-surface-700 dark:text-surface-300 hover:bg-white/40 dark:hover:bg-white/5 rounded-lg border border-surface-200 dark:border-surface-800 transition-all cursor-pointer"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Trash</span>
+          </button>
+          <button 
+            onClick={() => navigate('/renewals')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-bold bg-white/90 dark:bg-surface-800/90 hover:bg-surface-100 dark:hover:bg-surface-700 text-surface-700 dark:text-surface-200 hover:text-brand-600 dark:hover:text-brand-400 border border-surface-200/80 dark:border-surface-700/80 shadow-xs transition-all cursor-pointer group shrink-0"
+            title="Return to Renewals"
+          >
+            <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Back to Renewals</span>
+          </button>
+        </div>
       </div>
 
       {/* Bulk action selection bar */}

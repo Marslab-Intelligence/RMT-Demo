@@ -127,10 +127,14 @@ router.get('/leaderboard', authenticateToken, requireRole('super_admin', 'dept_a
   const { departmentId } = resolveScopedDepartmentId(req, res);
   try {
     const users = await computeUserPerformance(departmentId);
-    const byProfit = [...users].sort((a, b) => b.totalProfit - a.totalProfit);
-    const byConversion = [...users]
-      .map((u) => ({ ...u, conversionRatePct: (u.renewedCount + u.lostCount) > 0 ? Math.round((u.renewedCount / (u.renewedCount + u.lostCount)) * 1000) / 10 : 0 }))
-      .sort((a, b) => b.conversionRatePct - a.conversionRatePct);
+    const enrichedUsers = users.map((u) => ({
+      ...u,
+      conversionRatePct: (u.renewedCount + (u.lostCount || 0)) > 0
+        ? Math.round((u.renewedCount / (u.renewedCount + (u.lostCount || 0))) * 1000) / 10
+        : (u.ownedCount > 0 ? Math.round((u.renewedCount / u.ownedCount) * 1000) / 10 : 0)
+    }));
+    const byProfit = [...enrichedUsers].sort((a, b) => b.totalProfit - a.totalProfit);
+    const byConversion = [...enrichedUsers].sort((a, b) => b.conversionRatePct - a.conversionRatePct);
     res.json({ byProfit, byConversion });
   } catch (err) {
     console.error('[Leaderboard GET]', err);

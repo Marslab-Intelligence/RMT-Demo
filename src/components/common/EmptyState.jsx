@@ -5,6 +5,8 @@ export default function EmptyState({
   title = 'No data found',
   description = 'There are no records to display at this time.',
   action = null,
+  actionText = null,
+  onAction = null,
   className = '',
   compact = false
 }) {
@@ -23,11 +25,20 @@ export default function EmptyState({
           {description}
         </p>
       )}
-      {action && (
+      {action ? (
         <div className="mt-4">
           {action}
         </div>
-      )}
+      ) : actionText && onAction ? (
+        <div className="mt-4">
+          <button
+            onClick={onAction}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow-sm transition-colors"
+          >
+            {actionText}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

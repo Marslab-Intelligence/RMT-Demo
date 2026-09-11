@@ -18,6 +18,7 @@ import GlassSelect from '../components/GlassSelect';
 import RenewalTableRow from '../components/RenewalTableRow';
 import GlassDatePicker from '../components/GlassDatePicker';
 import EmptyState from '../components/common/EmptyState';
+import PageHeader from '../components/common/PageHeader';
 
 const normalizeHeader = (h) => {
   const clean = h.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1802,15 +1803,12 @@ export default function RenewalsList() {
   const isAllEmailStopped = renewals.length > 0 && renewals.every(r => r.stop_email);
 
   return (
-    <div className="space-y-4 animate-fade-in pb-28">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Renewal Management</h1>
-          <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-            {renewals.length} of {totalRecords} renewal{totalRecords === 1 ? '' : 's'}
-          </p>
-        </div>
+    <div className="space-y-4 sm:space-y-5 animate-fade-in pb-28 w-full">
+      <PageHeader
+        title="Renewal Management"
+        badge={user?.departmentName ? user.departmentName : user?.role ? user.role.toUpperCase() : null}
+        badgeColor="indigo"
+      />
 
       {isAllEmailStopped && (
         <div className="bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200 px-4 py-2.5 rounded-lg flex items-center justify-between shadow-sm animate-fade-in w-full">
@@ -1829,7 +1827,11 @@ export default function RenewalsList() {
         </div>
       )}
         
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto overflow-visible pb-1 sm:pb-0">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 w-full overflow-visible pb-1 sm:pb-0">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span>Active filter results: <strong className="text-slate-800 dark:text-white">{totalRecords}</strong></span>
+        </div>
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto overflow-visible">
           <div className="relative flex-1 min-w-[180px] sm:w-72 sm:flex-initial">
             <input
               type="text"
@@ -2145,7 +2147,8 @@ export default function RenewalsList() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      {/* Main Table Card */}
+      <div className="card overflow-hidden mt-3 sm:mt-5">
         <div 
           ref={tableContainerRef}
           onMouseDown={handleDragMouseDown}

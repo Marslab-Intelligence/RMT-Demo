@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { formatDateTime, formatTimeAgo } from '../utils/formatters';
 import VersionNotifier from './VersionNotifier';
 import AgentDrawer from './AgentDrawer';
+import ChatGptSidebar from './common/ChatGptSidebar';
 import { APP_VERSION } from '../version';
 import {
   LayoutDashboard,
@@ -16,12 +17,10 @@ import {
   Bell,
   Menu,
   X,
-  Search,
   ShieldCheck,
   ShieldAlert,
   Moon,
   Sun,
-  Home,
   History,
   Trash2,
   AlertTriangle,
@@ -33,10 +32,11 @@ import {
   Mail,
   Pin,
   Tag,
-  Plus,
   CheckCircle2,
   Info,
-  TrendingUp
+  TrendingUp,
+  BookOpen,
+  ChevronRight
 } from 'lucide-react';
 
 const getRoleLabel = (role) => {
@@ -65,7 +65,6 @@ const getNotificationIcon = (type) => {
 export default function Layout({ children }) {
   const { user, logout, token, getValidToken } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isHoveredSidebar, setIsHoveredSidebar] = useState(false);
   const [isSidebarPinned, setIsSidebarPinned] = useState(() => localStorage.getItem('sidebar_pinned') === 'true');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -80,13 +79,6 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const profileDropdownRef = useRef(null);
-  const [headerSearch, setHeaderSearch] = useState('');
-
-  const handleHeaderSearch = (e) => {
-    e.preventDefault();
-    const q = headerSearch.trim();
-    navigate(q ? `/renewals?search=${encodeURIComponent(q)}` : '/renewals');
-  };
 
   const [expiredNoReason, setExpiredNoReason] = useState([]);
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
@@ -551,72 +543,95 @@ export default function Layout({ children }) {
     navigate('/login');
   };
 
-  const navSections = [
-    {
-      label: null, // No label for primary section
-      items: [
-        { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-        { name: 'Renewals', path: '/renewals', icon: FileText },
-        { name: 'Pricing', path: '/pricing', icon: Tag },
-      ],
-    },
-    {
-      label: 'Communication',
-      items: [
-        { name: 'Notifications', path: '/notifications', icon: Bell },
-        { name: 'Approval Inbox', path: '/approval-inbox', icon: ShieldCheck },
-        { name: 'Email Automation', path: '/automation', icon: Mail },
-      ],
-    },
-    {
-      label: 'Analytics',
-      items: [
-        { name: (user?.role === 'super_admin' || user?.role === 'dept_admin') ? 'Reports & Logs' : 'Reports', path: '/reports', icon: BarChart3 },
-        ...((user?.role === 'super_admin' || user?.role === 'dept_admin') ? [{ name: 'Team Performance', path: '/analytics', icon: TrendingUp }] : []),
-        { name: 'Record Details', path: '/edits-history', icon: History },
-        { name: 'Visit Tracking', path: '/visits', icon: MapPin },
-      ],
-    },
-    ...((user?.role === 'super_admin' || user?.role === 'dept_admin') ? [{
-      label: 'Administration',
-      items: [
-        { name: 'Guardian Health', path: '/agent-health', icon: ShieldAlert },
-        { name: 'User Management', path: '/admin/users', icon: Users },
-        { name: 'Trash Data', path: '/trash', icon: Trash2 },
-      ],
-    }] : []),
-  ];
+  const navSections = React.useMemo(() => {
+    if (user?.role === 'super_admin') {
+      return [
+        {
+          label: 'Platform Control',
+          items: [
+            { name: 'Control Center', path: '/', icon: LayoutDashboard },
+            { name: 'Master Renewals', path: '/renewals', icon: FileText },
+            { name: 'Pricing Calculator', path: '/pricing', icon: Tag },
+          ],
+        },
+        {
+          label: 'Governance & Security',
+          items: [
+            { name: 'User Management', path: '/admin/users', icon: Users },
+            { name: 'Platform Audit Logs', path: '/activity-logs', icon: History },
+            { name: 'Trash Recovery', path: '/trash', icon: Trash2 },
+          ],
+        },
+        {
+          label: 'Operations & Alerts',
+          items: [
+            { name: 'Email Automation', path: '/automation', icon: Mail },
+            { name: 'Notifications', path: '/notifications', icon: Bell },
+          ],
+        },
+        {
+          label: 'Analytics',
+          items: [
+            { name: 'Platform Reports', path: '/reports', icon: BarChart3 },
+            { name: 'Team Performance', path: '/analytics', icon: TrendingUp },
+            { name: 'Visit Tracking', path: '/visits', icon: MapPin },
+          ],
+        },
+      ];
+    }
+
+    if (user?.role === 'dept_admin') {
+      return [
+        {
+          label: 'Operations',
+          items: [
+            { name: 'Operations Center', path: '/', icon: LayoutDashboard },
+            { name: 'Renewals Work Queue', path: '/renewals', icon: FileText },
+            { name: 'Pricing Calculator', path: '/pricing', icon: Tag },
+          ],
+        },
+        {
+          label: 'Management & Review',
+          items: [
+            { name: 'Specialists Roster', path: '/admin/users', icon: Users },
+            { name: 'Team Performance', path: '/analytics', icon: TrendingUp },
+            { name: 'Client Visits', path: '/visits', icon: MapPin },
+          ],
+        },
+        {
+          label: 'Reporting & Alerts',
+          items: [
+            { name: 'Department Reports', path: '/reports', icon: BarChart3 },
+            { name: 'Email Automation', path: '/automation', icon: Mail },
+            { name: 'Notifications', path: '/notifications', icon: Bell },
+          ],
+        },
+      ];
+    }
+
+    // Default 'user' (Specialist)
+    return [
+      {
+        label: 'My Workspace',
+        items: [
+          { name: 'My Dashboard', path: '/', icon: LayoutDashboard },
+          { name: 'My Renewals', path: '/renewals', icon: FileText },
+          { name: 'Pricing Calculator', path: '/pricing', icon: Tag },
+        ],
+      },
+      {
+        label: 'Field & Alerts',
+        items: [
+          { name: 'My Client Visits', path: '/visits', icon: MapPin },
+          { name: 'Notifications', path: '/notifications', icon: Bell },
+        ],
+      },
+    ];
+  }, [user?.role]);
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
-
-  const hoverTimeoutRef = useRef(null);
-
-  const handleSidebarMouseEnter = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setIsHoveredSidebar(true);
-  };
-
-  const handleSidebarMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
-      setIsHoveredSidebar(false);
-    }, 180);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
 
   /* Hover detection zone on the left edge of the viewport (for desktop only) */
   return (
@@ -626,419 +641,147 @@ export default function Layout({ children }) {
       {/* Floating AI Agent Assistant */}
       <AgentDrawer />
 
-      {/* Seamless Single Background Layer */}
-      <div className="fixed inset-0 pointer-events-none bg-gradient-to-br from-amber-100/90 via-orange-50/90 to-rose-100/90 dark:from-[#0c0a12] dark:via-[#0e111a] dark:to-[#170c14] transition-colors duration-300 ease-in-out z-0" />
-
-      {/* Decorative blobs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-amber-300/30 dark:bg-amber-700/15 blur-3xl transition-colors duration-300 ease-in-out" />
-        <div className="absolute top-1/2 right-0 w-80 h-80 rounded-full bg-orange-300/25 dark:bg-orange-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
-        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-rose-300/25 dark:bg-rose-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
-        <div className="absolute top-1/4 left-1/2 w-64 h-64 rounded-full bg-amber-200/20 dark:bg-amber-900/10 blur-3xl transition-colors duration-300 ease-in-out" />
-      </div>
-
-      {/* Mobile sidebar backdrop */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Hover detection zone on the left edge of the viewport (for desktop only) */}
+      {/* Seamless Single Background Layer — Elegant Dark / Minimal Light */}
       <div 
-        className={`fixed inset-y-0 left-0 w-4 z-20 hidden lg:block ${isSidebarPinned ? 'pointer-events-none' : ''}`}
-        onMouseEnter={handleSidebarMouseEnter} 
+        className="fixed inset-0 pointer-events-none transition-colors duration-300 ease-in-out z-0" 
+        style={{ 
+          backgroundColor: 'var(--app-bg)', 
+          backgroundImage: 'var(--app-bg-image)', 
+          backgroundAttachment: 'fixed' 
+        }} 
       />
- 
-      <div
-        ref={sidebarRef}
-        className={`flex flex-col w-[268px] flex-shrink-0 fixed inset-y-0 left-0 z-30 transform-gpu transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isSidebarPinned || isHoveredSidebar || isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        onMouseEnter={handleSidebarMouseEnter}
-        onMouseLeave={handleSidebarMouseLeave}
-        style={{
-          background: 'var(--sidebar-bg)',
-          backdropFilter: 'blur(40px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-          borderRight: '1px solid var(--sidebar-border)',
-        }}
-      >
-        {/* ── Sidebar Header / Logo ── */}
-        <div className="flex items-center justify-between h-14 px-4 flex-shrink-0"
-          style={{
-            borderBottom: '1px solid var(--sidebar-border)',
-          }}
-        >
-          <div
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2.5 cursor-pointer group select-none"
-            title="RMT Dashboard"
-          >
-            <span className="text-lg font-bold tracking-tight text-gray-900 dark:text-white transition-transform duration-300 group-hover:scale-105">
-              RMT
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                const newVal = !isSidebarPinned;
-                setIsSidebarPinned(newVal);
-                localStorage.setItem('sidebar_pinned', String(newVal));
-              }}
-              title={isSidebarPinned ? 'Unpin Sidebar' : 'Pin Sidebar'}
-              className={`hidden lg:flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-250 border cursor-pointer ${
-                isSidebarPinned
-                  ? 'sidebar-pin-active'
-                  : 'sidebar-pin-inactive'
-              }`}
-            >
-              <Pin 
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${isSidebarPinned ? 'rotate-45' : '-rotate-45'}`} 
-              />
-            </button>
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="lg:hidden p-1.5 rounded-xl text-stone-400 hover:text-stone-900 dark:hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
 
-        {/* ── Navigation ── */}
-        <div className="flex-1 overflow-y-auto px-2.5 py-1.5 sidebar-scroll">
-          {navSections.map((section, sIdx) => (
-            <div key={sIdx} className={sIdx > 0 ? 'mt-2.5' : ''}>
-              {section.label && (
-                <div className="px-2 mb-1 flex items-center gap-2">
-                  <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-stone-400/80 dark:text-gray-500">
-                    {section.label}
-                  </span>
-                  <div className="flex-1 h-px bg-gradient-to-r from-stone-300/40 to-transparent dark:from-white/10 dark:to-transparent" />
-                </div>
-              )}
-              <nav className="space-y-0.5">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <NavLink
-                      key={item.name}
-                      to={item.path}
-                      className={({ isActive }) =>
-                        `sidebar-nav-item group ${isActive ? 'sidebar-nav-active' : 'sidebar-nav-inactive'}`
-                      }
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {/* Active accent bar */}
-                          <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300 ${
-                            isActive ? 'h-4 bg-brand-500 dark:bg-brand-400 shadow-[0_0_8px_rgba(var(--brand-rgb),0.4)]' : 'h-0 bg-transparent'
-                          }`} />
-                          <div className={`sidebar-nav-icon ${isActive ? 'sidebar-nav-icon-active' : ''}`}>
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <span className={`text-[12.5px] font-medium transition-colors duration-200 ${
-                            isActive ? 'text-gray-900 dark:text-white' : 'text-stone-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
-                          }`}>
-                            {item.name}
-                          </span>
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                })}
-              </nav>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Sidebar Footer ── */}
-        <div className="sidebar-footer">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 dark:text-gray-500">
-              System
-            </span>
-            <span className="sidebar-version-badge">
-              v{APP_VERSION}
-            </span>
-          </div>
-        </div>
+      {/* Decorative blobs — brand/violet/cyan ambient glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-brand-300/30 dark:bg-brand-700/15 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute top-1/2 right-0 w-80 h-80 rounded-full bg-violet-300/25 dark:bg-violet-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-cyan-300/25 dark:bg-cyan-800/10 blur-3xl transition-colors duration-300 ease-in-out" />
+        <div className="absolute top-1/4 left-1/2 w-64 h-64 rounded-full bg-brand-200/20 dark:bg-brand-900/10 blur-3xl transition-colors duration-300 ease-in-out" />
       </div>
 
-      {/* Main Content */}
-      <div 
-        className={`flex-1 flex flex-col min-w-0 overflow-hidden transform-gpu transition-[padding-left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${(isSidebarPinned || isHoveredSidebar) ? 'lg:pl-[268px]' : 'lg:pl-0'}`} 
-        style={{ position: 'relative' }}
+      {/* ChatGPT-style Universal Sidebar for Super Admin, Dept Admin, and User */}
+      <ChatGptSidebar
+        sections={navSections}
+        user={user}
+        roleBadge={getRoleLabel(user?.role)}
+        appTitle="RMT"
+        homePath="/"
+        isPinned={isSidebarPinned}
+        onTogglePin={(pinned) => {
+          setIsSidebarPinned(pinned);
+          localStorage.setItem('sidebar_pinned', String(pinned));
+        }}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+        onLogout={handleLogout}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => {
+          const nextDark = !isDarkMode;
+          setIsDarkMode(nextDark);
+          if (nextDark) {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+          }
+        }}
+        automationStatus={automationStatus}
+        onToggleAutomationAction={(action) => {
+          setAutomationAction(action);
+          setAutomationNote('');
+          setIsAutomationModalOpen(true);
+        }}
+      />
+
+      {/* ── Main Layout Column ── */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-[padding-left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isSidebarPinned ? 'lg:pl-[260px]' : 'lg:pl-14'
+        }`}
       >
-        {/* Top Header */}
-        <header
-          className="h-14 flex items-center justify-between px-5 z-20 sticky top-0 backdrop-blur-xl bg-[#f8f0e6]/60 dark:bg-[#14101e]/60 transition-colors duration-300"
-          style={{
-            borderBottom: '1px solid var(--sidebar-border)',
-          }}
-        >
-          {/* ── LEFT: Home + Role Badge ── */}
-          <div className="flex items-center gap-2.5">
+        {/* Floating Top-Right Notification Button */}
+        <div className="fixed top-3.5 right-4 sm:right-6 z-40">
+          <div ref={notificationsRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-white"
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="dropdown-btn-glass flex items-center justify-center relative h-9 w-9 !px-0 rounded-xl shadow-xs"
+              title="Notifications"
+              aria-label="Notifications"
             >
-              <Menu className="w-5 h-5" />
-            </button>
-            <span
-              className={`text-base font-bold tracking-tight text-gray-900 dark:text-white cursor-pointer mr-1 ${(isSidebarPinned || isHoveredSidebar) ? 'lg:hidden' : ''}`}
-              onClick={() => navigate('/')}
-              title="Go to Dashboard"
-            >
-              RMT
-            </span>
-            <button
-              onClick={() => navigate('/')}
-              title="Go to Dashboard"
-              className="dropdown-btn-glass h-8 px-2.5 text-xs"
-            >
-              <Home className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-              <span className="hidden sm:inline font-semibold">Home</span>
-            </button>
-          </div>
-
-          {/* ── CENTER: Global Search (hidden on the Dashboard — it has its own controls) ── */}
-          {location.pathname !== '/' && (
-            <div className="hidden md:flex flex-1 justify-center px-4">
-              <form onSubmit={handleHeaderSearch} className="relative w-full max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400 dark:text-gray-500 pointer-events-none" />
-                <input
-                  type="text"
-                  value={headerSearch}
-                  onChange={(e) => setHeaderSearch(e.target.value)}
-                  placeholder="Search renewals and clients"
-                  className="input-field w-full h-9 pl-9 pr-3 text-xs"
-                />
-              </form>
-            </div>
-          )}
-
-          {/* ── RIGHT: Create + Role Badge + Theme + Bell + Profile ── */}
-          <div className="flex items-center gap-2.5">
-
-            {/* Quick Create (hidden on the Dashboard — it has its own Create Renewal button) */}
-            {location.pathname !== '/' && ((user?.role === 'super_admin' || user?.role === 'dept_admin') || user?.role === 'user') && (
-              <button
-                onClick={() => navigate('/renewals?create=1')}
-                className="btn-primary hidden sm:flex items-center gap-1.5 h-9 px-3 text-xs whitespace-nowrap"
-                title="Create a new renewal"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create</span>
-              </button>
-            )}
-
-            {/* Scope Indicator — what this account is actually scoped to */}
-            {(user?.departmentName || user?.categoryName) && (
-              <span
-                className="hidden md:inline-flex items-center h-8 px-2.5 rounded-xl text-[11px] font-semibold tracking-wide bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] text-slate-600 dark:text-slate-300 whitespace-nowrap"
-                title="Your account's visibility scope"
-              >
-                Viewing: {user?.departmentName || 'All Departments'}{user?.categoryName ? ` → ${user.categoryName}` : ''}
-              </span>
-            )}
-
-            {/* Role Badge */}
-            <span className={`hidden sm:inline-flex items-center h-8 px-2.5 rounded-xl text-[11px] font-semibold tracking-wide ${getRoleBadgeStyle(user?.role)}`}>
-              {getRoleLabel(user?.role)}
-            </span>
-
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center justify-center h-9 w-9 rounded-xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer bg-black/[0.04] dark:bg-white/[0.04] hover:bg-black/[0.08] dark:hover:bg-white/[0.08] border border-black/[0.08] dark:border-white/[0.08] text-gray-700 dark:text-gray-300"
-              title={isDarkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            >
-              <div className="relative w-4 h-4 flex items-center justify-center">
-                {isDarkMode ? (
-                  <Sun className="w-4 h-4 text-amber-400 transition-transform duration-300 rotate-0 scale-100" />
-                ) : (
-                  <Moon className="w-4 h-4 text-slate-700 transition-transform duration-300 rotate-0 scale-100" />
-                )}
-              </div>
-            </button>
-
-            {/* Notifications */}
-            <div ref={notificationsRef} className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="dropdown-btn-glass flex items-center justify-center relative h-9 w-9 !px-0 rounded-xl"
-              >
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 border-2 border-white dark:border-surface-900 rounded-full" />
-                )}
-              </button>
-
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 dropdown-menu-glass z-50">
-                  <div className="px-4 py-3 flex justify-between items-center border-b border-black/[0.06] dark:border-white/[0.08]">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <span className="text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">
-                        {unreadCount} new
-                      </span>
-                    )}
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                        No notifications right now.
-                      </div>
-                    ) : (
-                      notifications.slice(0, 5).map(notif => (
-                        <div
-                          key={notif.id}
-                          onClick={() => handleNotificationClick(notif)}
-                          className={`p-3.5 border-b border-black/[0.04] dark:border-white/[0.04] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-pointer transition-colors ${
-                            !notif.read ? 'bg-black/[0.02] dark:bg-white/[0.02]' : ''
-                          }`}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <div className="mt-0.5">
-                              {getNotificationIcon(notif.type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-xs ${!notif.read ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
-                                {notif.message}
-                              </p>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
-                                {formatTimeAgo(notif.created_at)}
-                              </span>
-                            </div>
-                            {!notif.read && (
-                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 flex-shrink-0" />
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-2 border-t border-black/[0.06] dark:border-white/[0.08]">
-                    <button
-                      onClick={() => { navigate('/notifications'); setShowNotifications(false); }}
-                      className="w-full text-center text-xs font-medium text-red-500 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                      View all notifications
-                    </button>
-                  </div>
-                </div>
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 border-2 border-white dark:border-surface-900 rounded-full" />
               )}
-            </div>
+            </button>
 
-            {/* Profile Dropdown */}
-            <div ref={profileDropdownRef} className="relative">
-              <button
-                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="dropdown-btn-glass h-9 pl-1.5 pr-3 rounded-xl"
-              >
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 text-white"
-                  style={{
-                    background: (user?.role === 'super_admin' || user?.role === 'dept_admin')
-                      ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
-                      : 'linear-gradient(135deg,#10b981,#047857)',
-                  }}
-                >
-                  {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 dropdown-menu-glass z-50 shadow-2xl">
+                <div className="px-4 py-3 flex justify-between items-center border-b border-black/[0.06] dark:border-white/[0.08]">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <span className="text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">
+                      {unreadCount} new
+                    </span>
+                  )}
                 </div>
-                <div className="hidden sm:flex flex-col items-start leading-none ml-2">
-                  <span className="text-xs font-semibold text-gray-900 dark:text-gray-200">
-                    {user?.fullName}
-                  </span>
-                  <span className="text-[10px] mt-0.5 truncate max-w-[110px] text-gray-500 dark:text-gray-400">
-                    {user?.email || `${getRoleLabel(user?.role)?.toLowerCase()}@marslab...`}
-                  </span>
-                </div>
-                <ChevronDown
-                  className={`w-3 h-3 hidden sm:block ml-2 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
-                    showProfileDropdown ? 'rotate-180' : 'rotate-0'
-                  }`}
-                />
-              </button>
-
-              {showProfileDropdown && (
-                <div
-                  className="absolute right-0 mt-2 w-60 dropdown-menu-glass z-50"
-                >
-                  <div className="px-4 py-3.5 flex items-center gap-3 border-b border-black/[0.06] dark:border-white/[0.08]">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 text-white"
-                      style={{
-                        background: (user?.role === 'super_admin' || user?.role === 'dept_admin')
-                          ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
-                          : 'linear-gradient(135deg,#10b981,#047857)',
-                      }}
-                    >
-                      {user?.fullName?.charAt(0)?.toUpperCase() || '?'}
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No notifications right now.
                     </div>
-                    <div className="flex flex-col leading-snug overflow-hidden">
-                      <span className="text-sm font-semibold truncate text-gray-900 dark:text-gray-100">
-                        {user?.fullName}
-                      </span>
-                      <span className="text-xs truncate mt-0.5 text-gray-500 dark:text-gray-400">
-                        {user?.email || 'marslab.in'}
-                      </span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 self-start ${getRoleBadgeStyle(user?.role)}`}>
-                        {getRoleLabel(user?.role)}
-                      </span>
-                    </div>
-                  </div>
-                  {(user?.role === 'super_admin' || user?.role === 'dept_admin') && (
-                    <div className="px-3 py-2.5 flex flex-col gap-2 border-b border-black/[0.06] dark:border-white/[0.08]">
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                          Email Automation
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${automationStatus === 'start' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                          <span className="text-[10px] font-semibold" style={{ color: automationStatus === 'start' ? '#10b981' : '#ef4444' }}>
-                            {automationStatus === 'start' ? 'Active' : 'Stopped'}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowProfileDropdown(false);
-                          setAutomationAction(automationStatus === 'start' ? 'stop' : 'start');
-                          setAutomationNote('');
-                          setIsAutomationModalOpen(true);
-                        }}
-                        className={`flex items-center justify-center gap-1.5 w-full py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                          automationStatus === 'start'
-                            ? 'bg-rose-50/50 hover:bg-rose-100/60 text-rose-600 border-rose-200 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/50'
-                            : 'bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50'
+                  ) : (
+                    notifications.slice(0, 5).map(notif => (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNotificationClick(notif)}
+                        className={`p-3.5 border-b border-black/[0.04] dark:border-white/[0.04] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-pointer transition-colors ${
+                          !notif.read ? 'bg-black/[0.02] dark:bg-white/[0.02]' : ''
                         }`}
                       >
-                        <Mail className="w-3.5 h-3.5" />
-                        {automationStatus === 'start' ? 'Stop Scheduler' : 'Start Scheduler'}
-                      </button>
-                    </div>
+                        <div className="flex gap-3 items-start">
+                          <div className="mt-0.5">
+                            {getNotificationIcon(notif.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs ${!notif.read ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
+                              {notif.message}
+                            </p>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
+                              {formatTimeAgo(notif.created_at)}
+                            </span>
+                          </div>
+                          {!notif.read && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    ))
                   )}
-                  <div className="p-2">
-                    <button
-                      onClick={() => { setShowProfileDropdown(false); handleLogout(); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-sm font-medium transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sign Out
-                    </button>
-                  </div>
                 </div>
-              )}
-            </div>
+                <div className="p-2 border-t border-black/[0.06] dark:border-white/[0.08]">
+                  <button
+                    onClick={() => { navigate('/notifications'); setShowNotifications(false); }}
+                    className="w-full text-center text-xs font-medium text-red-500 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    View all notifications
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </header>
+        </div>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar relative">
+        {/* Mobile Menu Toggle Button */}
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="lg:hidden fixed top-3.5 left-4 z-40 p-2 rounded-xl text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 dropdown-btn-glass flex items-center justify-center h-9 w-9 shadow-xs"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <main className="flex-1 overflow-y-auto p-4 pt-14 sm:p-6 sm:pr-16 custom-scrollbar relative">
           <div className="w-full">
             {children}
           </div>

@@ -3,41 +3,130 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 254 243 199;
-    --foreground: 0 0 0;
+  /* Unified Elegant Dark / Minimal Light glass theme — same two themes
+     across every profile (Super Admin, Dept Admin, Team Member, BDM, and
+     the CEO cockpit). Toggled by Layout.jsx's existing `.dark` class on
+     <html> (Tailwind darkMode: 'class') — not a data-theme attribute. */
+  :root,
+  html[data-theme="light"] {
+    --background: 244 240 247;
+    --foreground: 23 21 36;
     --card: 255 255 255;
-    --card-foreground: 0 0 0;
-    --border: 255 255 255;
+    --card-foreground: 23 21 36;
+    --border: 222 211 223;
     --input: 255 255 255;
-    --ring: 79 145 168;
-    --brand-rgb: 79, 145, 168;
-    --sidebar-bg: rgba(252, 247, 238, 0.82);
-    --sidebar-border: rgba(200, 180, 155, 0.35);
+    --ring: 97 28 105;
+    --brand-rgb: 97, 28, 105;
+    --sidebar-bg: rgba(244, 240, 247, 0.75);
+    --sidebar-border: rgba(222, 211, 223, 0.8);
+
+    /* ── Slack Aubergine Theme Tokens ── */
+    --app-bg: #f4f0f7;
+    --app-bg-image: none;
+
+    --glass-surface-1: rgba(255, 255, 255, 0.70);
+    --glass-surface-2: rgba(255, 255, 255, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.75);
+    --glass-blur: 24px;
+    --glass-blur-sm: 14px;
+    --glass-saturate: 180%;
+    --shadow-glass: inset 0 1px 1px 0 rgba(255, 255, 255, 0.8), 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 12px 0 rgba(0, 0, 0, 0.03);
+
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    --brand: #611c69;
+    --brand-hover: #4b154c;
+
+    --text-primary: #1a0f24;
+    --text-secondary: #5a4660;
+    --text-muted: #8c7a94;
+    --border-light: rgba(222, 211, 223, 0.85);
+
+    --success: #10b981;
+    --success-soft: rgba(16, 185, 129, 0.12);
+    --warning: #f59e0b;
+    --warning-soft: rgba(245, 158, 11, 0.12);
+    --danger: #e0215b;
+    --danger-soft: rgba(224, 33, 91, 0.12);
+    --info: #38c6f0;
+    --info-soft: rgba(56, 198, 240, 0.10);
+
+    --chart-primary: #611c69;
+    --chart-secondary: #38c6f0;
+    --chart-tertiary: #31b57d;
+    --chart-quaternary: #a559a5;
+    --chart-grid: rgba(140, 122, 148, 0.18);
   }
 
-  .dark {
-    --background: 12 10 18;
-    --foreground: 245 244 240;
-    --card: 255 255 255;
-    --card-foreground: 245 244 240;
-    --border: 255 255 255;
-    --input: 255 255 255;
-    --ring: 79 145 168;
-    --brand-rgb: 120, 190, 210;
-    --sidebar-bg: rgba(14, 11, 22, 0.88);
+  .dark,
+  html.dark,
+  html[data-theme="dark"],
+  [data-theme="dark"] {
+    --background: 26 29 34;
+    --foreground: 237 233 240;
+    --card: 33 36 41;
+    --card-foreground: 237 233 240;
+    --border: 62 48 62;
+    --input: 33 36 41;
+    --ring: 165 89 165;
+    --brand-rgb: 165, 89, 165;
+    --sidebar-bg: rgba(26, 29, 34, 0.80);
     --sidebar-border: rgba(255, 255, 255, 0.08);
+
+    /* ── Slack Aubergine Dark Theme Tokens ── */
+    --app-bg: #1a1d22;
+    --app-bg-image: none;
+
+    --glass-surface-1: rgba(33, 36, 41, 0.70);
+    --glass-surface-2: rgba(33, 36, 41, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-blur: 24px;
+    --glass-blur-sm: 14px;
+    --glass-saturate: 180%;
+    --shadow-glass: inset 0 1px 1px 0 rgba(255, 255, 255, 0.10), 0 14px 40px -8px rgba(0, 0, 0, 0.5), 0 4px 16px 0 rgba(0, 0, 0, 0.3);
+
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    --brand: #a559a5;
+    --brand-hover: #c07cc0;
+
+    --text-primary: #ede9f0;
+    --text-secondary: #b8a8be;
+    --text-muted: #8c7a94;
+    --border-light: rgba(255, 255, 255, 0.10);
+
+    --success: #34d399;
+    --success-soft: rgba(52, 211, 153, 0.14);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.14);
+    --danger: #fb7185;
+    --danger-soft: rgba(251, 113, 133, 0.14);
+    --info: #67d4f5;
+    --info-soft: rgba(103, 212, 245, 0.14);
+
+    --chart-primary: #a559a5;
+    --chart-secondary: #67d4f5;
+    --chart-tertiary: #34d399;
+    --chart-quaternary: #c07cc0;
+    --chart-grid: rgba(255, 255, 255, 0.08);
   }
 }
 
 @layer base {
   html {
-    background-color: #fdf6ed;
+    font-size: 17px;
+    background-color: #f4f0f7;
     color-scheme: light;
   }
 
   html.dark {
-    background-color: #0c0a12;
+    background-color: #1a1d22;
     color-scheme: dark;
   }
 
@@ -63,6 +152,65 @@
 }
 
 @layer components {
+  /* ── Liquid Glass / Theme Surfaces ───────────────────────── */
+  .glass {
+    background: var(--glass-surface-1);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    border-radius: var(--radius-lg);
+  }
+
+  .stat-card,
+  .glass-subtle {
+    background: var(--glass-surface-2);
+    backdrop-filter: blur(var(--glass-blur-sm)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  .header-glass {
+    background: var(--glass-surface-1) !important;
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+    border-color: var(--glass-border) !important;
+  }
+
+  .sidebar-glass {
+    background: var(--sidebar-bg) !important;
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+    border-color: var(--glass-border) !important;
+  }
+
+  /* ── Semantic Badges ───────────────────────────────────────── */
+  .badge-success {
+    background: var(--success-soft);
+    color: var(--success);
+    border: 1px solid var(--success);
+  }
+
+  .badge-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+  }
+
+  .badge-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+  }
+
+  .badge-info {
+    background: var(--info-soft);
+    color: var(--info);
+    border: 1px solid var(--info);
+  }
+
   /* ── iPhone Liquid Glass Card ──────────────────────────────── */
   .card {
     @apply rounded-2xl text-black dark:text-white relative overflow-hidden transition-all duration-300;
@@ -76,7 +224,7 @@
       0 4px 12px 0 rgba(0, 0, 0, 0.03);
   }
   .dark .card {
-    background: rgba(20, 18, 30, 0.65);
+    background: rgba(19, 27, 43, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 
       inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
@@ -94,7 +242,7 @@
     transform: translateY(-2px);
   }
   .dark .card:hover {
-    background: rgba(30, 26, 45, 0.75);
+    background: rgba(27, 38, 60, 0.75);
     border-color: rgba(255, 255, 255, 0.22);
     box-shadow: 
       inset 0 1px 2px 0 rgba(255, 255, 255, 0.25),
@@ -121,64 +269,56 @@
 
   /* ── Liquid Glass Buttons ──────────────────────────────────── */
   .btn-primary {
-    @apply px-4 py-2.5 text-white rounded-xl font-semibold text-xs tracking-wide
+    @apply px-4 py-2.5 text-white font-semibold text-xs tracking-wide
            focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:ring-offset-2
            transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
            flex items-center justify-center gap-2 relative overflow-hidden;
-    background: linear-gradient(135deg, rgba(30, 27, 46, 0.92), rgba(18, 16, 28, 0.96));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.20);
-    box-shadow: 
-      inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
-      0 4px 16px rgba(0, 0, 0, 0.25);
+    background: var(--brand);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 14px rgba(var(--brand-rgb), 0.25);
   }
   .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(45, 40, 68, 0.95), rgba(28, 24, 44, 0.98));
-    border-color: rgba(255, 255, 255, 0.35);
-    box-shadow: 
-      inset 0 1px 2px 0 rgba(255, 255, 255, 0.4),
-      0 8px 24px rgba(0, 0, 0, 0.35);
+    background: var(--brand-hover);
+    box-shadow: 0 6px 20px rgba(var(--brand-rgb), 0.35);
   }
   .dark .btn-primary {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 240, 245, 0.90));
-    color: #0f0e17;
-    border-color: rgba(255, 255, 255, 0.8);
-    box-shadow: 
-      inset 0 1px 1px 0 rgba(255, 255, 255, 1),
-      0 4px 16px rgba(255, 255, 255, 0.2);
+    background: var(--brand);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 14px rgba(var(--brand-rgb), 0.3);
   }
   .dark .btn-primary:hover:not(:disabled) {
-    background: #ffffff;
-    color: #000000;
-    box-shadow: 
-      inset 0 1px 2px 0 rgba(255, 255, 255, 1),
-      0 8px 24px rgba(255, 255, 255, 0.3);
+    background: var(--brand-hover);
+    color: #ffffff;
   }
 
   .btn-secondary {
-    @apply px-4 py-2.5 text-black dark:text-surface-100 rounded-xl font-semibold text-xs
-           focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1
+    @apply px-4 py-2.5 font-semibold text-xs
+           focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:ring-offset-1
            transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
            flex items-center justify-center gap-2;
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.5), 0 2px 8px rgba(0, 0, 0, 0.05);
+    background: var(--glass-surface-2);
+    backdrop-filter: blur(var(--glass-blur-sm));
+    -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.3), 0 2px 8px rgba(0, 0, 0, 0.04);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.70);
-    border-color: rgba(255, 255, 255, 0.9);
+    background: var(--glass-surface-1);
+    border-color: var(--glass-border);
+    color: var(--text-primary);
   }
   .dark .btn-secondary {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.16);
-    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+    background: var(--glass-surface-2);
+    border-color: var(--glass-border);
+    color: var(--text-primary);
   }
   .dark .btn-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.28);
+    background: var(--glass-surface-1);
+    color: var(--text-primary);
   }
 
   .btn-danger {
@@ -216,8 +356,8 @@
   }
   .dark .input-field:focus {
     background: rgba(255, 255, 255, 0.10);
-    border-color: rgba(168, 85, 247, 0.6);
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+    border-color: rgba(var(--brand-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.15);
   }
 
   /* ── Liquid Glass Select & Dropdown Buttons ────────────────── */
@@ -342,7 +482,7 @@
       0 6px 16px 0 rgba(0, 0, 0, 0.06);
   }
   .dark .dropdown-menu-glass {
-    background: rgba(20, 17, 32, 0.96);
+    background: rgba(16, 23, 38, 0.96);
     backdrop-filter: blur(24px) saturate(190%);
     -webkit-backdrop-filter: blur(24px) saturate(190%);
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -365,14 +505,14 @@
       0 8px 24px 0 rgba(0, 0, 0, 0.08);
   }
   .dark .modal-glass {
-    background: rgba(20, 17, 32, 0.96);
+    background: rgba(16, 23, 38, 0.96);
     backdrop-filter: blur(28px) saturate(190%);
     -webkit-backdrop-filter: blur(28px) saturate(190%);
     border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 
       inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
       0 25px 70px -15px rgba(0, 0, 0, 0.8),
-      0 0 50px rgba(139, 92, 246, 0.10);
+      0 0 50px rgba(var(--brand-rgb), 0.10);
   }
 
   .modal-header-glass {
@@ -380,7 +520,7 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   }
   .dark .modal-header-glass {
-    background: rgba(26, 21, 41, 0.75);
+    background: rgba(21, 30, 48, 0.75);
     border-bottom: 1px solid rgba(255, 255, 255, 0.10);
   }
 
@@ -389,7 +529,7 @@
     border-top: 1px solid rgba(0, 0, 0, 0.06);
   }
   .dark .modal-footer-glass {
-    background: rgba(26, 21, 41, 0.75);
+    background: rgba(21, 30, 48, 0.75);
     border-top: 1px solid rgba(255, 255, 255, 0.10);
   }
 
@@ -400,7 +540,7 @@
     font-weight: 500;
   }
   .dark select option {
-    background-color: #181528;
+    background-color: #101a26;
     color: #f8fafc;
   }
 
@@ -673,5 +813,23 @@ input[type="month"] {
 .dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8) brightness(1.2);
   cursor: pointer;
+}
+
+/* ── Fallback for browsers without backdrop-filter support ─────────
+   Glass surfaces degrade to a solid (non-transparent) fill instead of a
+   half-opaque overlay that would otherwise be unreadable without the blur
+   behind it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .card-accent, .btn-secondary, .input-field, .select-glass,
+  select.input-field, .dropdown-btn-glass, .dropdown-menu-glass,
+  .modal-glass, .modal-header-glass, .modal-footer-glass {
+    background: rgb(var(--card)) !important;
+  }
+  .dark .card, .dark .card-accent, .dark .btn-secondary, .dark .input-field,
+  .dark .select-glass, .dark select.input-field, .dark .dropdown-btn-glass,
+  .dark .dropdown-menu-glass, .dark .modal-glass, .dark .modal-header-glass,
+  .dark .modal-footer-glass {
+    background: rgb(var(--card)) !important;
+  }
 }
 

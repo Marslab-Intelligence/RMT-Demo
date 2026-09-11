@@ -23,6 +23,8 @@
   "dependencies": {
     "@google/genai": "^2.18.0",
     "@react-spring/web": "^10.1.2",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "@visx/gradient": "^4.0.0",
     "@visx/group": "^4.0.0",
     "@visx/scale": "^4.0.0",

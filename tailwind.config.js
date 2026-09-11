@@ -5,30 +5,37 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Slack Aubergine brand ramp — primary is Slack's signature
+        // deep purple (#611C69 light / #A559A5 dark). Components follow
+        // the existing `text-brand-600 dark:text-brand-400` pattern.
         brand: {
-          50: '#f0f9fb',
-          100: '#d4eef5',
-          200: '#a9ddeb',
-          300: '#7ecce0',
-          400: '#5db8d3',
-          500: '#4f91a8',
-          600: '#3d7a8f',
-          700: '#2e6070',
-          800: '#1f4a56',
-          900: '#14333d',
-          950: '#0a1e24',
+          50: '#faf5fb',
+          100: '#f3e8f4',
+          200: '#e7d1ea',
+          300: '#d4add9',
+          400: '#c07cc0',
+          500: '#a559a5',
+          600: '#611c69',
+          700: '#4b154c',
+          800: '#3d1240',
+          900: '#331037',
+          950: '#1e0821',
         },
+        // Warm purple-gray neutral ramp — complements the aubergine
+        // accent and reads correctly in dark-mode surfaces via
+        // `dark:bg-surface-900` convention.
         surface: {
-          50: '#fafaf9',
-          100: '#f5f4f0',
-          200: '#ebebea',
-          300: '#d6d6d4',
-          400: '#a1a1a0',
-          500: '#71717a',
-          600: '#52525b',
-          700: '#3f3f46',
-          800: '#27272a',
-          900: '#18181b',
+          50: '#faf8fb',
+          100: '#f4f0f7',
+          200: '#e5dde8',
+          300: '#cfc3d4',
+          400: '#8c7a94',
+          500: '#6b5a73',
+          600: '#5a4660',
+          700: '#45354b',
+          800: '#2d2333',
+          900: '#1a0f24',
+          950: '#0d0614',
         },
       },
       fontFamily: {
