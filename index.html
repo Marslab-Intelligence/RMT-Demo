@@ -9,6 +9,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>MarsLab — Renewal Management System</title>
+    <script>
+      // Suppress unhandled third-party analytics beacon bugs (e.g. Cloudflare Insights reportAllChanges undefined startTime)
+      window.addEventListener('error', function(e) {
+        var msg = e && (e.message || (e.error && e.error.message)) || '';
+        if (msg.indexOf('startTime') !== -1 || msg.indexOf('reportAllChanges') !== -1 || (e.filename && e.filename.indexOf('cloudflareinsights') !== -1)) {
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+      window.onerror = function(msg, url) {
+        if ((typeof msg === 'string' && (msg.indexOf('startTime') !== -1 || msg.indexOf('reportAllChanges') !== -1)) || (url && url.indexOf('cloudflareinsights') !== -1)) {
+          return true;
+        }
+      };
+    </script>
   </head>
   <body class="antialiased">
     <div id="root"></div>

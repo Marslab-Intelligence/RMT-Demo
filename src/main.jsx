@@ -20,9 +20,19 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload();
 });
 
-// Auto-recover from stale deployment script/chunk load errors
+// Auto-recover from stale deployment script/chunk load errors & suppress external beacon bugs
 window.addEventListener('error', (event) => {
-  const msg = event?.message || '';
+  const msg = event?.message || event?.error?.message || '';
+  if (
+    msg.includes('startTime') ||
+    msg.includes('reportAllChanges') ||
+    (event?.filename && event.filename.includes('cloudflareinsights'))
+  ) {
+    event.preventDefault();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    return true;
+  }
+
   if (
     msg.includes('Failed to fetch dynamically imported module') ||
     msg.includes('Expected a JavaScript-or-Wasm module script') ||

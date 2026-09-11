@@ -2157,7 +2157,7 @@ export default function RenewalsList() {
           onMouseMove={handleDragMouseMove}
           className={`overflow-auto max-h-[calc(100vh-210px)] relative select-none custom-scrollbar ${isDragDown ? 'cursor-grabbing' : 'cursor-grab'}`}
         >
-          <table className="w-full text-left text-[11px] sm:text-xs table-fixed">
+          <table className="w-full min-w-[1450px] text-left text-[11px] sm:text-xs table-fixed">
             <colgroup>
               <col style={{ width: '36px' }} />
               {visibleCols.id && <col style={{ width: `${colWidths.id || 95}px` }} />}
