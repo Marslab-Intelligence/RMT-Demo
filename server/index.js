@@ -95,12 +95,17 @@ try {
         imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.org', 'https://unpkg.com', 'https://cdn.21st.dev'],
         connectSrc: [
           "'self'",
+          'https://unpkg.com',
+          'https://*.tile.openstreetmap.org',
+          'https://tile.openstreetmap.org',
           'https://cloudflareinsights.com',
           'https://static.cloudflareinsights.com',
           'https://api.iconify.design',
           'https://api.simplesvg.com',
           'https://api.unisvg.com',
-        ], // api.iconify.design (+ fallback hosts) is fetched at runtime by the iconify-icon web component
+          'ws:',
+          'wss:',
+        ], // unpkg.com & openstreetmap for Leaflet sourcemaps/tiles; api.iconify.design for runtime icons
         frameSrc: ["'self'"], // TopologyField's srcDoc iframe is same-origin
         objectSrc: ["'none'"],
         upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,

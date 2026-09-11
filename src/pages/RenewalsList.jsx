@@ -1567,11 +1567,17 @@ export default function RenewalsList() {
   // never be referentially stable across a data refetch (defeating
   // RenewalTableRow's memo for the whole table on every fetch, including the
   // 300ms-debounced search-driven ones). The caller (the row) already has the
-  // full row object on hand, so it can just be passed directly. Also calls
-  // through fetchRenewalsRef instead of closing over fetchRenewals — see the
-  // ref's comment above.
-  const handleRenewalConfirmation = useCallback(async (row, confirmation) => {
-    const id = row.id;
+  // Supports either (row, confirmation) or legacy (id, confirmation) signature
+  const handleRenewalConfirmation = useCallback(async (rowOrId, confirmation) => {
+    const row = (typeof rowOrId === 'object' && rowOrId !== null)
+      ? rowOrId
+      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+    const id = row?.id || rowOrId;
+    if (!id || id === 'undefined') {
+      toast.error('Invalid renewal selection');
+      return;
+    }
+
     if (confirmation === 'renewed') {
       let currentFormatted = '';
       try {
@@ -1635,11 +1641,19 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token]);
+  }, [token, renewals]);
 
-  // PERF: same (id -> row) signature change as handleRenewalConfirmation above.
-  const handleInvoiceStatus = useCallback(async (row, status) => {
-    const id = row.id;
+  // Supports either (row, status) or legacy (id, status) signature
+  const handleInvoiceStatus = useCallback(async (rowOrId, status) => {
+    const row = (typeof rowOrId === 'object' && rowOrId !== null)
+      ? rowOrId
+      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+    const id = row?.id || rowOrId;
+    if (!id || id === 'undefined') {
+      toast.error('Invalid renewal selection');
+      return;
+    }
+
     if (status === 'Sent') {
       setSelectedInvoiceRenewal(row);
       setIsInvoiceModalOpen(true);
@@ -1664,11 +1678,19 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token]);
+  }, [token, renewals]);
 
-  // PERF: same (id -> row) signature change as handleRenewalConfirmation above.
-  const handlePaymentStatus = useCallback(async (row, status) => {
-    const id = row.id;
+  // Supports either (row, status) or legacy (id, status) signature
+  const handlePaymentStatus = useCallback(async (rowOrId, status) => {
+    const row = (typeof rowOrId === 'object' && rowOrId !== null)
+      ? rowOrId
+      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+    const id = row?.id || rowOrId;
+    if (!id || id === 'undefined') {
+      toast.error('Invalid renewal selection');
+      return;
+    }
+
     if (status === 'Yes') {
       setSelectedPaymentRenewal(row);
       setPaymentAmountInput(row.value ? String(row.value) : '');
@@ -1695,7 +1717,7 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token]);
+  }, [token, renewals]);
 
   const submitPaymentDetails = async () => {
     if (!selectedPaymentRenewal) return;
@@ -1768,6 +1790,11 @@ export default function RenewalsList() {
       return;
     }
     
+    if (!confirmRenewalId) {
+      toast.error('No renewal selected.');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/renewals/${confirmRenewalId}/confirm-renewal`, {
         method: 'PUT',

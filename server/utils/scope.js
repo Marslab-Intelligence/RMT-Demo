@@ -103,9 +103,14 @@ export async function filterIdsByScope(db, ids, user) {
  * should stop.
  */
 export async function fetchAndCheckScope(db, id, user, res) {
+  const numId = parseInt(id, 10);
+  if (isNaN(numId)) {
+    res.status(400).json({ error: 'Invalid renewal ID.' });
+    return null;
+  }
   const { rows } = await db.query(
     'SELECT id, department_id, category_id, owner, sales_email FROM renewals WHERE id = $1',
-    [id]
+    [numId]
   );
   if (rows.length === 0) {
     res.status(404).json({ error: 'Renewal not found.' });

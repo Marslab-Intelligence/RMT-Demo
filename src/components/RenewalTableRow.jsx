@@ -185,7 +185,7 @@ function RenewalTableRow({
           {((isSales || isAdmin) && !(row.renewal_confirmation === 'renewed' && row.days_left !== null && row.days_left !== undefined && row.days_left > 30)) ? (
             <GlassSelect
               value={row.renewal_confirmation || 'pending'}
-              onChange={(e, val) => onRenewalConfirmationChange(row.id, val !== undefined ? val : e.target.value)}
+              onChange={(e, val) => onRenewalConfirmationChange(row, val !== undefined ? val : e.target.value)}
               size="xs"
               className="w-full text-center"
               options={[
@@ -212,7 +212,7 @@ function RenewalTableRow({
           {(isSales || isAdmin) ? (
             <GlassSelect
               value={row.invoice_status || 'Not'}
-              onChange={(e, val) => onInvoiceStatusChange(row.id, val !== undefined ? val : e.target.value)}
+              onChange={(e, val) => onInvoiceStatusChange(row, val !== undefined ? val : e.target.value)}
               size="xs"
               className="w-full min-w-[66px] max-w-[76px] mx-auto"
               options={[
@@ -238,7 +238,7 @@ function RenewalTableRow({
           {(isSales || isAdmin) ? (
             <GlassSelect
               value={row.payment_status || 'No'}
-              onChange={(e, val) => onPaymentStatusChange(row.id, val !== undefined ? val : e.target.value)}
+              onChange={(e, val) => onPaymentStatusChange(row, val !== undefined ? val : e.target.value)}
               size="xs"
               className="w-full min-w-[66px] max-w-[76px] mx-auto"
               options={[

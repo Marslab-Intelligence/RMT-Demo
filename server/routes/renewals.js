@@ -2388,6 +2388,11 @@ router.put('/:id/approve-edit', authenticateToken, requireRole('super_admin', 'd
 // Renewal Confirmation — Sales team updates renewal status
 router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin', 'dept_admin', 'user'), async (req, res) => {
   try {
+    const renewalId = parseInt(req.params.id, 10);
+    if (isNaN(renewalId)) {
+      return res.status(400).json({ error: 'Invalid renewal ID.' });
+    }
+
     const { renewal_confirmation, remarks } = req.body;
     const validOptions = [
       'pending',
@@ -2406,7 +2411,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
       return res.status(400).json({ error: 'Invalid renewal confirmation option.' });
     }
 
-    const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
+    const { rows } = await db.query('SELECT * FROM renewals WHERE id = $1', [renewalId]);
     const renewal = rows[0];
     if (!renewal) return res.status(404).json({ error: 'Renewal not found.' });
     if (!assertRenewalOwnership(renewal, req, res)) return;
@@ -2414,7 +2419,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
     if (renewal_confirmation === 'pending') {
       await db.query(`
         UPDATE renewals SET renewal_confirmation = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
-      `, [renewal_confirmation, req.params.id]);
+      `, [renewal_confirmation, renewalId]);
       broadcastEvent('renewals_updated', null);
       return res.json({ message: 'Renewal confirmation reset to pending.' });
     }
@@ -2454,7 +2459,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
       `, [
         renewal_confirmation, new_renewal_date, computedStatus,
         flags.day_30_sent, flags.day_20_sent, flags.day_15_sent, flags.day_10_sent, flags.day_5_sent, flags.day_3_sent, flags.day_0_sent, flags.sales_15_sent, flags.sales_5_sent, flags.sales_3_sent,
-        req.params.id
+        renewalId
       ]);
 
       const previousData = JSON.stringify({
@@ -2468,7 +2473,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
         INSERT INTO renewal_history (renewal_id, action, previous_data, new_data, performed_by)
         VALUES ($1, 'renewed', $2, $3, $4)
       `, [
-        req.params.id,
+        renewalId,
         previousData,
         JSON.stringify({ renewal_date: new_renewal_date, service: renewal.service, value: renewal.value, status: computedStatus }),
         req.user.id
@@ -2499,7 +2504,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
           invoice_sent_date = NULL,
           updated_at = CURRENT_TIMESTAMP 
         WHERE id = $2
-      `, [renewal_confirmation, req.params.id]);
+      `, [renewal_confirmation, renewalId]);
 
       const previousData = JSON.stringify({
         renewal_date: renewal.renewal_date,
@@ -2512,7 +2517,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
         INSERT INTO renewal_history (renewal_id, action, previous_data, new_data, performed_by)
         VALUES ($1, 'edited', $2, $3, $4)
       `, [
-        req.params.id,
+        renewalId,
         previousData,
         JSON.stringify({ renewal_date: null, service: renewal.service, value: 0, status: '-' }),
         req.user.id
@@ -2520,7 +2525,7 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
     } else {
       await db.query(`
         UPDATE renewals SET renewal_confirmation = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
-      `, [renewal_confirmation, req.params.id]);
+      `, [renewal_confirmation, renewalId]);
     }
 
     // Format label for display
@@ -2602,76 +2607,92 @@ router.put('/:id/confirm-renewal', authenticateToken, requireRole('super_admin',
       `/renewals?search=${renewal.unique_id}`
     ]);
 
-    await sendCliqNotification(`${statusIcon} *Renewal Status Update*\n*Client ID:* ${renewal.unique_id}\n*Client:* ${renewal.client_name}\n*Service:* ${renewal.service}\n*New Status:* ${label}\n*Updated By:* ${actorRole}\n${remarks ? `*Remarks:* ${remarks}` : ''}`);
+    try {
+      await sendCliqNotification(`${statusIcon} *Renewal Status Update*\n*Client ID:* ${renewal.unique_id}\n*Client:* ${renewal.client_name}\n*Service:* ${renewal.service}\n*New Status:* ${label}\n*Updated By:* ${actorRole}\n${remarks ? `*Remarks:* ${remarks}` : ''}`);
+    } catch (cliqErr) {
+      console.warn('Cliq notification non-blocking error:', cliqErr.message);
+    }
 
     // Send email notification to sales team
-    const { sendEmail } = await import('../services/emailService.js');
-    
-    // Get sales team email(s)
-    const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
+    try {
+      const { sendEmail } = await import('../services/emailService.js');
+      
+      // Get sales team email(s)
+      const { rows: salesUsers } = await db.query("SELECT email FROM users WHERE role = 'user' AND is_active = true");
 
-    const emailHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-    <body style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:40px 20px;">
-        <tr><td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-            <tr>
-              <td style="background:linear-gradient(135deg,${statusColor},${statusColor}dd);padding:36px 40px;text-align:center;">
-                <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">${statusIcon} Renewal Status Update</h1>
-                <p style="color:#ffffffcc;margin:8px 0 0;font-size:14px;">CST Team Confirmation</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:40px;">
-                <p style="color:#1e293b;font-size:16px;line-height:1.6;margin:0 0 20px;">Dear <strong>CST Team</strong>,</p>
-                <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 24px;">
-                  The renewal status has been updated for the following client:
-                </p>
-                <div style="background:#f8fafc;border-left:4px solid ${statusColor};border-radius:8px;padding:20px;margin:0 0 24px;">
-                  <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.client_name)}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.service)}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Renewal Date</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${new Date(renewal.renewal_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td></tr>
-                    <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:${statusColor};font-size:14px;font-weight:700;text-align:right;">${escapeHtml(label)}</td></tr>
-                    ${remarks ? `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Remarks</td><td style="padding:6px 0;color:#1e293b;font-size:14px;text-align:right;">${escapeHtml(remarks)}</td></tr>` : ''}
-                  </table>
-                </div>
-                <p style="color:#94a3b8;font-size:13px;margin:32px 0 0;padding-top:20px;border-top:1px solid #e2e8f0;">
-                  Regards,<br><strong style="color:#1e293b;">MarsLab Renewals</strong>
-                </p>
-              </td>
-            </tr>
-            <tr><td style="background:#f8fafc;padding:20px 40px;text-align:center;"><p style="color:#94a3b8;font-size:12px;margin:0;">Powered by MarsLab Renewal Management System</p></td></tr>
-          </table>
-        </td></tr>
-      </table>
-    </body>
-    </html>`;
+      const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+      <body style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:40px 20px;">
+          <tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+              <tr>
+                <td style="background:linear-gradient(135deg,${statusColor},${statusColor}dd);padding:36px 40px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">${statusIcon} Renewal Status Update</h1>
+                  <p style="color:#ffffffcc;margin:8px 0 0;font-size:14px;">CST Team Confirmation</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:40px;">
+                  <p style="color:#1e293b;font-size:16px;line-height:1.6;margin:0 0 20px;">Dear <strong>CST Team</strong>,</p>
+                  <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 24px;">
+                    The renewal status has been updated for the following client:
+                  </p>
+                  <div style="background:#f8fafc;border-left:4px solid ${statusColor};border-radius:8px;padding:20px;margin:0 0 24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Client</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.client_name)}</td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Service</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(renewal.service)}</td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Renewal Date</td><td style="padding:6px 0;color:#1e293b;font-size:14px;font-weight:600;text-align:right;">${new Date(renewal.renewal_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td></tr>
+                      <tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Status</td><td style="padding:6px 0;color:${statusColor};font-size:14px;font-weight:700;text-align:right;">${escapeHtml(label)}</td></tr>
+                      ${remarks ? `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;">Remarks</td><td style="padding:6px 0;color:#1e293b;font-size:14px;text-align:right;">${escapeHtml(remarks)}</td></tr>` : ''}
+                    </table>
+                  </div>
+                  <p style="color:#94a3b8;font-size:13px;margin:32px 0 0;padding-top:20px;border-top:1px solid #e2e8f0;">
+                    Regards,<br><strong style="color:#1e293b;">MarsLab Renewals</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr><td style="background:#f8fafc;padding:20px 40px;text-align:center;"><p style="color:#94a3b8;font-size:12px;margin:0;">Powered by MarsLab Renewal Management System</p></td></tr>
+            </table>
+          </td></tr>
+        </table>
+      </body>
+      </html>`;
 
-    for (const salesUser of salesUsers) {
-      const emailResult = await sendEmail({
-        to: salesUser.email,
-        subject: `${statusIcon} Renewal Update: ${renewal.client_name} — ${label}`,
-        html: emailHtml,
-      });
-      await db.query(`
-        INSERT INTO email_logs (renewal_id, client_name, service, recipient_email, recipient_type, email_type, subject, status, error_message)
-        VALUES ($1, $2, $3, $4, 'sales', 'renewal_status_update', $5, $6, $7)
-      `, [renewal.id, renewal.client_name, renewal.service, salesUser.email, `${statusIcon} Renewal Update: ${renewal.client_name} — ${label}`, emailResult.success ? 'sent' : 'failed', emailResult.error || null]);
+      for (const salesUser of salesUsers) {
+        try {
+          const emailResult = await sendEmail({
+            to: salesUser.email,
+            subject: `${statusIcon} Renewal Update: ${renewal.client_name} — ${label}`,
+            html: emailHtml,
+          });
+          await db.query(`
+            INSERT INTO email_logs (renewal_id, client_name, service, recipient_email, recipient_type, email_type, subject, status, error_message)
+            VALUES ($1, $2, $3, $4, 'sales', 'renewal_status_update', $5, $6, $7)
+          `, [renewal.id, renewal.client_name, renewal.service, salesUser.email, `${statusIcon} Renewal Update: ${renewal.client_name} — ${label}`, emailResult?.success ? 'sent' : 'failed', emailResult?.error || null]);
+        } catch (mailUserErr) {
+          console.warn('Failed to send renewal update email to:', salesUser.email, mailUserErr.message);
+        }
+      }
+    } catch (emailErr) {
+      console.warn('Email notification non-blocking error:', emailErr.message);
     }
 
     console.log(`🔔 Renewal confirmation: ${renewal.client_name} → "${label}" | Notified sales team.`);
 
-    const { rows: updatedRows } = await db.query('SELECT * FROM renewals WHERE id = $1', [req.params.id]);
+    const { rows: updatedRows } = await db.query('SELECT * FROM renewals WHERE id = $1', [renewalId]);
     broadcastEvent('renewals_updated', updatedRows[0]);
 
     // Trigger scheduler to send emails/notifications immediately if it was renewed with a new date
     if (renewal_confirmation === 'renewed') {
-      const { processRenewals } = await import('../services/scheduler.js');
-      setTimeout(() => processRenewals().catch(err => console.error('Scheduler auto-run error (non-blocking):', err)), 1000);
+      try {
+        const { processRenewals } = await import('../services/scheduler.js');
+        setTimeout(() => processRenewals().catch(err => console.error('Scheduler auto-run error (non-blocking):', err)), 1000);
+      } catch (schedErr) {
+        console.warn('Scheduler auto-run import error:', schedErr.message);
+      }
     }
 
     res.json(updatedRows[0]);
