@@ -360,11 +360,13 @@ export default function Layout({ children }) {
 
   const fetchNotificationsRef = useRef(fetchNotifications);
   const fetchExpiredNoReasonRef = useRef(fetchExpiredNoReason);
+  const getValidTokenRef = useRef(getValidToken);
 
   useEffect(() => {
     fetchNotificationsRef.current = fetchNotifications;
     fetchExpiredNoReasonRef.current = fetchExpiredNoReason;
-  }, [fetchNotifications, fetchExpiredNoReason]);
+    getValidTokenRef.current = getValidToken;
+  }, [fetchNotifications, fetchExpiredNoReason, getValidToken]);
 
   // Real-Time Event Stream Connection (SSE) with robust reconnection and token refresh
   useEffect(() => {
@@ -376,8 +378,8 @@ export default function Layout({ children }) {
       if (!active) return;
 
       try {
-        // Get a valid/fresh token (refreshes silently if expired)
-        const currentToken = await getValidToken();
+        // Get a valid/fresh token
+        const currentToken = token || (getValidTokenRef.current ? await getValidTokenRef.current() : null);
         if (!currentToken || !active) return;
 
         if (eventSource) {
@@ -441,7 +443,7 @@ export default function Layout({ children }) {
         eventSource = null;
       }
     };
-  }, [token, getValidToken]);
+  }, [token]);
 
   const handleMarkAsRead = async (id) => {
     try {

@@ -560,9 +560,17 @@ export default function RenewalsList() {
   const [openFilterCol, setOpenFilterCol] = useState(null); // which column dropdown is open
   const [filterPos, setFilterPos] = useState({ top: 0, left: 0 });
   const filterRef = useRef(null);
+  const isInternalUpdateRef = useRef(false);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
-  // Sync state when URL searchParams change (e.g. browser back/forward)
+  // Sync state when URL searchParams change externally (e.g. browser back/forward or navigation links)
   useEffect(() => {
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
+
     const s = searchParams.get('search') || '';
     if (s !== search) setSearch(s);
 
@@ -571,72 +579,101 @@ export default function RenewalsList() {
 
     const d = searchParams.get('dateRange') || 'all';
     const dateArr = d === 'all' ? [] : d.split(',').filter(Boolean);
-    if (JSON.stringify(dateArr) !== JSON.stringify(dateRangeFilter)) setDateRangeFilter(dateArr);
+    if (dateArr.join(',') !== dateRangeFilter.join(',')) setDateRangeFilter(dateArr);
 
     const v = searchParams.get('valueRange') || 'all';
     const valArr = v === 'all' ? [] : v.split(',').filter(Boolean);
-    if (JSON.stringify(valArr) !== JSON.stringify(valueFilter)) setValueFilter(valArr);
+    if (valArr.join(',') !== valueFilter.join(',')) setValueFilter(valArr);
 
     const stCol = searchParams.get('statusCol') || 'all';
     const stColArr = stCol === 'all' ? [] : stCol.split(',').filter(Boolean);
-    if (JSON.stringify(stColArr) !== JSON.stringify(statusColFilter)) setStatusColFilter(stColArr);
+    if (stColArr.join(',') !== statusColFilter.join(',')) setStatusColFilter(stColArr);
 
     const renConf = searchParams.get('renewalConfirmation') || 'all';
     const renArr = renConf === 'all' ? [] : renConf.split(',').filter(Boolean);
-    if (JSON.stringify(renArr) !== JSON.stringify(renewedFilter)) setRenewedFilter(renArr);
+    if (renArr.join(',') !== renewedFilter.join(',')) setRenewedFilter(renArr);
 
     const inv = searchParams.get('invoiceStatus') || 'all';
     const invArr = inv === 'all' ? [] : inv.split(',').filter(Boolean);
-    if (JSON.stringify(invArr) !== JSON.stringify(invoiceFilter)) setInvoiceFilter(invArr);
+    if (invArr.join(',') !== invoiceFilter.join(',')) setInvoiceFilter(invArr);
 
     const pay = searchParams.get('paymentStatus') || 'all';
     const payArr = pay === 'all' ? [] : pay.split(',').filter(Boolean);
-    if (JSON.stringify(payArr) !== JSON.stringify(paymentFilter)) setPaymentFilter(payArr);
+    if (payArr.join(',') !== paymentFilter.join(',')) setPaymentFilter(payArr);
 
     const clientN = searchParams.get('clientName') || '';
     const clientArr = clientN === '' ? [] : clientN.split(',').filter(Boolean);
-    if (JSON.stringify(clientArr) !== JSON.stringify(clientFilter)) setClientFilter(clientArr);
+    if (clientArr.join(',') !== clientFilter.join(',')) setClientFilter(clientArr);
 
     const servN = searchParams.get('serviceName') || 'all';
     const servArr = servN === 'all' ? [] : servN.split(',').filter(Boolean);
-    if (JSON.stringify(servArr) !== JSON.stringify(serviceFilter)) setServiceFilter(servArr);
+    if (servArr.join(',') !== serviceFilter.join(',')) setServiceFilter(servArr);
   }, [searchParams]);
 
-  // Sync URL searchParams when local state filters change
+  // Sync URL searchParams when local state filters change, preserving any non-filter query parameters
   const updateUrlFilters = useCallback((filters) => {
-    const params = new URLSearchParams();
+    const current = searchParamsRef.current;
+    const params = new URLSearchParams(current);
+
     if (filters.search) params.set('search', filters.search);
+    else params.delete('search');
+
     if (filters.statusFilter && filters.statusFilter !== 'all') params.set('status', filters.statusFilter);
+    else params.delete('status');
 
     if (Array.isArray(filters.dateRangeFilter) && filters.dateRangeFilter.length > 0) {
       params.set('dateRange', filters.dateRangeFilter.join(','));
-    }
-    if (Array.isArray(filters.valueFilter) && filters.valueFilter.length > 0) {
-      params.set('valueRange', filters.valueFilter.join(','));
-    }
-    if (Array.isArray(filters.statusColFilter) && filters.statusColFilter.length > 0) {
-      params.set('statusCol', filters.statusColFilter.join(','));
-    }
-    if (Array.isArray(filters.renewedFilter) && filters.renewedFilter.length > 0) {
-      params.set('renewalConfirmation', filters.renewedFilter.join(','));
-    }
-    if (Array.isArray(filters.invoiceFilter) && filters.invoiceFilter.length > 0) {
-      params.set('invoiceStatus', filters.invoiceFilter.join(','));
-    }
-    if (Array.isArray(filters.paymentFilter) && filters.paymentFilter.length > 0) {
-      params.set('paymentStatus', filters.paymentFilter.join(','));
-    }
-    if (Array.isArray(filters.clientFilter) && filters.clientFilter.length > 0) {
-      params.set('clientName', filters.clientFilter.join(','));
-    }
-    if (Array.isArray(filters.serviceFilter) && filters.serviceFilter.length > 0) {
-      params.set('serviceName', filters.serviceFilter.join(','));
+    } else {
+      params.delete('dateRange');
     }
 
-    if (params.toString() !== searchParams.toString()) {
+    if (Array.isArray(filters.valueFilter) && filters.valueFilter.length > 0) {
+      params.set('valueRange', filters.valueFilter.join(','));
+    } else {
+      params.delete('valueRange');
+    }
+
+    if (Array.isArray(filters.statusColFilter) && filters.statusColFilter.length > 0) {
+      params.set('statusCol', filters.statusColFilter.join(','));
+    } else {
+      params.delete('statusCol');
+    }
+
+    if (Array.isArray(filters.renewedFilter) && filters.renewedFilter.length > 0) {
+      params.set('renewalConfirmation', filters.renewedFilter.join(','));
+    } else {
+      params.delete('renewalConfirmation');
+    }
+
+    if (Array.isArray(filters.invoiceFilter) && filters.invoiceFilter.length > 0) {
+      params.set('invoiceStatus', filters.invoiceFilter.join(','));
+    } else {
+      params.delete('invoiceStatus');
+    }
+
+    if (Array.isArray(filters.paymentFilter) && filters.paymentFilter.length > 0) {
+      params.set('paymentStatus', filters.paymentFilter.join(','));
+    } else {
+      params.delete('paymentStatus');
+    }
+
+    if (Array.isArray(filters.clientFilter) && filters.clientFilter.length > 0) {
+      params.set('clientName', filters.clientFilter.join(','));
+    } else {
+      params.delete('clientName');
+    }
+
+    if (Array.isArray(filters.serviceFilter) && filters.serviceFilter.length > 0) {
+      params.set('serviceName', filters.serviceFilter.join(','));
+    } else {
+      params.delete('serviceName');
+    }
+
+    if (params.toString() !== current.toString()) {
+      isInternalUpdateRef.current = true;
       setSearchParams(params, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [setSearchParams]);
 
   useEffect(() => {
     updateUrlFilters({
@@ -651,7 +688,19 @@ export default function RenewalsList() {
       clientFilter,
       serviceFilter
     });
-  }, [search, statusFilter, dateRangeFilter, valueFilter, statusColFilter, renewedFilter, invoiceFilter, paymentFilter, clientFilter, serviceFilter, updateUrlFilters]);
+  }, [
+    search,
+    statusFilter,
+    dateRangeFilter,
+    valueFilter,
+    statusColFilter,
+    renewedFilter,
+    invoiceFilter,
+    paymentFilter,
+    clientFilter,
+    serviceFilter,
+    updateUrlFilters
+  ]);
   
   // Update URL and local state when status changes
   const handleStatusChange = (newStatus) => {
@@ -1049,10 +1098,16 @@ export default function RenewalsList() {
   useEffect(() => {
     if (renewals && renewals.length > 0) {
       setMasterClientList(prev => {
+        let hasNew = false;
         const set = new Set(prev);
         renewals.forEach(r => {
-          if (r.client_name && r.client_name.trim()) set.add(r.client_name.trim());
+          const name = r.client_name?.trim();
+          if (name && !set.has(name)) {
+            set.add(name);
+            hasNew = true;
+          }
         });
+        if (!hasNew && prev.length > 0) return prev;
         return Array.from(set).sort((a, b) => a.localeCompare(b));
       });
     }
@@ -1112,28 +1167,26 @@ export default function RenewalsList() {
     }
   };
 
-  // PERF: fetchRenewals closes over ~10 filter states, so it can't safely be
-  // wrapped in useCallback without an easy-to-get-wrong dependency list. Row
-  // action handlers below need to call the CURRENT fetchRenewals after a
-  // write, but must themselves stay referentially stable (see
-  // RenewalTableRow.jsx's memo comment) — this ref lets them do both: always
-  // call the latest fetchRenewals, without fetchRenewals itself needing to be
-  // in their own useCallback dependency arrays.
+  // Referentially stable refs for fetchRenewals and renewals
   const fetchRenewalsRef = useRef(fetchRenewals);
   fetchRenewalsRef.current = fetchRenewals;
+  const renewalsRef = useRef(renewals);
+  renewalsRef.current = renewals;
 
-  // Real-time synchronization event listener
+  // Real-time synchronization event listener — attaches once and always calls latest fetchRenewalsRef
   useEffect(() => {
     const handleRealTimeUpdate = () => {
       console.log('📡 UI Refetching renewals in background from SSE event...');
-      fetchRenewals(true);
+      if (fetchRenewalsRef.current) {
+        fetchRenewalsRef.current(true);
+      }
     };
 
     window.addEventListener('rmt_renewals_updated', handleRealTimeUpdate);
     return () => {
       window.removeEventListener('rmt_renewals_updated', handleRealTimeUpdate);
     };
-  }, [page, search, statusFilter, dateRangeFilter, valueFilter, statusColFilter, renewedFilter, invoiceFilter, paymentFilter, clientFilter, serviceFilter, token]);
+  }, []);
 
   const confirmDeleteBatch = async () => {
     try {
@@ -1166,7 +1219,7 @@ export default function RenewalsList() {
       fetchRenewals();
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [page, search, statusFilter, dateRangeFilter, valueFilter, statusColFilter, renewedFilter, clientFilter, serviceFilter, token]);
+  }, [page, search, statusFilter, dateRangeFilter, valueFilter, statusColFilter, renewedFilter, invoiceFilter, paymentFilter, clientFilter, serviceFilter, token]);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -1571,7 +1624,7 @@ export default function RenewalsList() {
   const handleRenewalConfirmation = useCallback(async (rowOrId, confirmation) => {
     const row = (typeof rowOrId === 'object' && rowOrId !== null)
       ? rowOrId
-      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+      : (renewalsRef.current?.find(r => r.id === rowOrId) || { id: rowOrId });
     const id = row?.id || rowOrId;
     if (!id || id === 'undefined') {
       toast.error('Invalid renewal selection');
@@ -1641,13 +1694,13 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token, renewals]);
+  }, [token]);
 
   // Supports either (row, status) or legacy (id, status) signature
   const handleInvoiceStatus = useCallback(async (rowOrId, status) => {
     const row = (typeof rowOrId === 'object' && rowOrId !== null)
       ? rowOrId
-      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+      : (renewalsRef.current?.find(r => r.id === rowOrId) || { id: rowOrId });
     const id = row?.id || rowOrId;
     if (!id || id === 'undefined') {
       toast.error('Invalid renewal selection');
@@ -1678,13 +1731,13 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token, renewals]);
+  }, [token]);
 
   // Supports either (row, status) or legacy (id, status) signature
   const handlePaymentStatus = useCallback(async (rowOrId, status) => {
     const row = (typeof rowOrId === 'object' && rowOrId !== null)
       ? rowOrId
-      : (renewals.find(r => r.id === rowOrId) || { id: rowOrId });
+      : (renewalsRef.current?.find(r => r.id === rowOrId) || { id: rowOrId });
     const id = row?.id || rowOrId;
     if (!id || id === 'undefined') {
       toast.error('Invalid renewal selection');
@@ -1717,7 +1770,7 @@ export default function RenewalsList() {
     } catch (err) {
       toast.error('Network error');
     }
-  }, [token, renewals]);
+  }, [token]);
 
   const submitPaymentDetails = async () => {
     if (!selectedPaymentRenewal) return;
