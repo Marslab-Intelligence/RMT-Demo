@@ -409,6 +409,32 @@ router.post('/:id/services', authenticateToken, requireRole('super_admin', 'dept
 // Mounted separately below at /api/services since it isn't nested under a department id.
 export const servicesRouter = Router();
 
+// GET /api/services — returns all active services with department info and counts
+servicesRouter.get('/', authenticateToken, async (req, res) => {
+  try {
+    const isSuper = req.user.role === 'super_admin';
+    let query = `
+      SELECT c.id, c.name, c.slug, c.is_active, c.created_at, c.department_id,
+        d.name as department_name,
+        (SELECT COUNT(*)::int FROM users u WHERE u.category_id = c.id) as user_count,
+        (SELECT COUNT(*)::int FROM renewals r WHERE r.category_id = c.id AND r.is_deleted = false) as renewal_count
+      FROM categories c
+      JOIN departments d ON d.id = c.department_id
+    `;
+    const params = [];
+    if (!isSuper) {
+      params.push(req.user.department_id || req.user.departmentId);
+      query += ` WHERE c.department_id = $1`;
+    }
+    query += ` ORDER BY d.name ASC, c.name ASC`;
+    const { rows } = await db.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('[Services GET ALL]', err);
+    res.status(500).json({ error: 'Failed to fetch all services.' });
+  }
+});
+
 servicesRouter.patch('/:id', authenticateToken, requireRole('super_admin', 'dept_admin'), async (req, res) => {
   const categoryId = parseInt(req.params.id, 10);
   const { name, is_active } = req.body;

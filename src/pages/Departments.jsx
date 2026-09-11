@@ -93,6 +93,14 @@ export default function Departments() {
     servicesScrollRef.current.scrollBy({ top: scrollAmount, behavior: 'smooth' });
   };
 
+  // KPI Lens state: 'fleet' (Department Fleet Hub) | 'services' (Master Services Directory)
+  const [kpiFilter, setKpiFilter] = useState('fleet');
+  const [allServices, setAllServices] = useState([]);
+  const [allServicesLoading, setAllServicesLoading] = useState(false);
+  const [servicesDeptFilter, setServicesDeptFilter] = useState('all'); // department id or 'all'
+  const [servicesLayoutMode, setServicesLayoutMode] = useState('grid'); // 'grid' | 'lanes' | 'table'
+  const [servicesSearchQuery, setServicesSearchQuery] = useState('');
+
   // Toolbar states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
@@ -172,10 +180,34 @@ export default function Departments() {
     }
   }, [token]);
 
+  // Fetch all services across departments
+  const fetchAllServices = useCallback(async () => {
+    if (!token) return;
+    setAllServicesLoading(true);
+    try {
+      const res = await fetch('/api/services', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setAllServices(data);
+        // Also populate services map by departmentId
+        const map = {};
+        for (const s of data) {
+          (map[s.department_id] ||= []).push(s);
+        }
+        setServices(prev => ({ ...prev, ...map }));
+      }
+    } catch (err) {
+      console.error('Failed to load all services:', err);
+    } finally {
+      setAllServicesLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     fetchDepartments();
     fetchUsers();
-  }, [fetchDepartments, fetchUsers]);
+    fetchAllServices();
+  }, [fetchDepartments, fetchUsers, fetchAllServices]);
 
   // Map dept admins by department_id
   const deptAdminsByDept = useMemo(() => {
@@ -522,6 +554,53 @@ export default function Departments() {
     return result;
   }, [departments, statusFilter, searchQuery, sortBy, deptAdminsByDept, services]);
 
+  // Master Services Catalog Filtering
+  const filteredAllServices = useMemo(() => {
+    let list = [...allServices];
+
+    // Department filter
+    if (servicesDeptFilter !== 'all') {
+      const targetDeptId = Number(servicesDeptFilter);
+      list = list.filter(s => s.department_id === targetDeptId);
+    }
+
+    // Status filter
+    if (servicesStatusFilter === 'active') {
+      list = list.filter(s => s.is_active);
+    } else if (servicesStatusFilter === 'inactive') {
+      list = list.filter(s => !s.is_active);
+    }
+
+    // Search query
+    const q = servicesSearchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(s => {
+        const matchName = s.name.toLowerCase().includes(q);
+        const matchDept = (s.department_name || '').toLowerCase().includes(q);
+        const users = usersByCategory[s.id] || [];
+        const matchUser = users.some(u => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+        return matchName || matchDept || matchUser;
+      });
+    }
+
+    return list;
+  }, [allServices, servicesDeptFilter, servicesStatusFilter, servicesSearchQuery, usersByCategory]);
+
+  // Grouped by department for Lanes layout
+  const servicesByDeptGroup = useMemo(() => {
+    const groups = [];
+    for (const dept of departments) {
+      const deptServices = filteredAllServices.filter(s => s.department_id === dept.id);
+      if (deptServices.length > 0 || servicesDeptFilter === String(dept.id)) {
+        groups.push({
+          department: dept,
+          services: deptServices
+        });
+      }
+    }
+    return groups;
+  }, [departments, filteredAllServices, servicesDeptFilter]);
+
   // Keep selected department valid for split console
   useEffect(() => {
     if (filteredDepartments.length > 0) {
@@ -643,15 +722,25 @@ export default function Departments() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4.5 mt-6 pt-6 border-t border-slate-200/60 dark:border-white/10">
           {/* Total Departments */}
           <div
-            onClick={() => setStatusFilter('all')}
+            onClick={() => {
+              setKpiFilter('fleet');
+              setStatusFilter('all');
+            }}
             className={`group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
-              statusFilter === 'all'
-                ? 'bg-brand-500/10 border-brand-500/40 dark:bg-brand-500/15 shadow-md shadow-brand-500/10'
+              kpiFilter === 'fleet' && statusFilter === 'all'
+                ? 'bg-brand-500/10 border-brand-500/50 dark:bg-brand-500/15 shadow-md shadow-brand-500/10 ring-2 ring-brand-500/30'
                 : 'bg-white/70 dark:bg-slate-950/40 border-slate-200/80 dark:border-white/10 hover:border-brand-500/30 hover:bg-white/90'
             }`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Fleet Units</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Fleet Units</span>
+                {kpiFilter === 'fleet' && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-500 text-white shadow-xs">
+                    Fleet View
+                  </span>
+                )}
+              </div>
               <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 group-hover:scale-110 transition-transform">
                 <Building2 className="w-4 h-4" />
               </div>
@@ -667,16 +756,44 @@ export default function Departments() {
           </div>
 
           {/* Total Services */}
-          <div className="group relative overflow-hidden rounded-2xl border p-4 bg-white/70 dark:bg-slate-950/40 border-slate-200/80 dark:border-white/10 hover:border-emerald-500/30 hover:bg-white/90 transition-all duration-300">
+          <div
+            onClick={() => {
+              setKpiFilter(prev => prev === 'services' ? 'fleet' : 'services');
+              if (allServices.length === 0) fetchAllServices();
+            }}
+            className={`group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 cursor-pointer ${
+              kpiFilter === 'services'
+                ? 'bg-gradient-to-br from-emerald-500/15 via-emerald-500/10 to-teal-500/5 border-emerald-500/50 shadow-lg shadow-emerald-500/15 ring-2 ring-emerald-500/40'
+                : 'bg-white/70 dark:bg-slate-950/40 border-slate-200/80 dark:border-white/10 hover:border-emerald-500/40 hover:bg-white/90 hover:shadow-md'
+            }`}
+          >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Services</span>
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 group-hover:scale-110 transition-transform">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Services</span>
+                {kpiFilter === 'services' && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs animate-pulse">
+                    Active Lens
+                  </span>
+                )}
+              </div>
+              <div className={`p-2 rounded-xl border group-hover:scale-110 transition-transform ${
+                kpiFilter === 'services'
+                  ? 'bg-emerald-500 text-white border-emerald-400 shadow-xs'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+              }`}>
                 <Layers className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                {stats.totalServices}
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-between">
+                <span>{stats.totalServices}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all ${
+                  kpiFilter === 'services'
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                    : 'text-slate-400 border-transparent group-hover:border-emerald-500/20 group-hover:text-emerald-600'
+                }`}>
+                  {kpiFilter === 'services' ? 'Showing Catalog' : 'Click to View All →'}
+                </span>
               </div>
               <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> Across all departments
@@ -846,8 +963,498 @@ export default function Departments() {
         </div>
       </div>
 
-      {/* ── 4. Main Views (Grid, Split Console, Table) ── */}
-      {departments.length === 0 ? (
+      {/* ── 4. Main Views: Global Services Directory OR Fleet Department Views ── */}
+      {kpiFilter === 'services' ? (
+        <div className="space-y-6">
+          {/* Header Deck */}
+          <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-white/90 via-emerald-500/[0.03] to-slate-50/80 dark:from-slate-900/90 dark:via-emerald-950/[0.08] dark:to-slate-950/80 backdrop-blur-2xl p-6 sm:p-7 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200/60 dark:border-white/10">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-emerald-500/25 flex-shrink-0">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                      Master Services Directory
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {filteredAllServices.length} Active Offerings
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Unified cross-department view of all {allServices.length} service lines across {departments.length} division units.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-start md:self-center flex-wrap">
+                <button
+                  onClick={() => setKpiFilter('fleet')}
+                  className="btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Return to Department Hub</span>
+                </button>
+                {isSuperAdmin && departments.length > 0 && (
+                  <button
+                    onClick={() => setAddServiceFor(departments[0].id)}
+                    className="btn-primary text-xs px-3.5 py-2 flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Service</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Department Filter Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Filter By Department Division:
+                </p>
+                {servicesDeptFilter !== 'all' && (
+                  <button
+                    onClick={() => setServicesDeptFilter('all')}
+                    className="text-[11px] font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                  >
+                    Show All Departments
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+                <button
+                  onClick={() => setServicesDeptFilter('all')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+                    servicesDeptFilter === 'all'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>All Departments</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    servicesDeptFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-white/10'
+                  }`}>
+                    {allServices.length}
+                  </span>
+                </button>
+
+                {departments.map(dept => {
+                  const isSelected = String(dept.id) === String(servicesDeptFilter);
+                  const count = allServices.filter(s => s.department_id === dept.id).length;
+                  return (
+                    <button
+                      key={dept.id}
+                      onClick={() => setServicesDeptFilter(isSelected ? 'all' : String(dept.id))}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+                        isSelected
+                          ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>{dept.name}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-white/10'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sub-toolbar: Search & Layout Mode Switcher */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={servicesSearchQuery}
+                  onChange={e => setServicesSearchQuery(e.target.value)}
+                  placeholder="Filter by service, department, or member..."
+                  className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                />
+                {servicesSearchQuery && (
+                  <button
+                    onClick={() => setServicesSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Layout Switcher (Grid | Lanes | Table) */}
+              <div className="flex items-center gap-1.5 self-end sm:self-center p-1 rounded-xl bg-slate-100 dark:bg-slate-950/60 border border-slate-200/60 dark:border-white/5">
+                <button
+                  onClick={() => setServicesLayoutMode('grid')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    servicesLayoutMode === 'grid'
+                      ? 'bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Card Matrix"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
+                <button
+                  onClick={() => setServicesLayoutMode('lanes')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    servicesLayoutMode === 'lanes'
+                      ? 'bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Department Lanes"
+                >
+                  <Columns className="w-3.5 h-3.5" />
+                  <span>Lanes</span>
+                </button>
+                <button
+                  onClick={() => setServicesLayoutMode('table')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    servicesLayoutMode === 'table'
+                      ? 'bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Density List"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Table</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Directory Body Content */}
+          {allServicesLoading ? (
+            <div className="py-16 text-center rounded-3xl bg-white/60 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/10">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Cataloging organizational services…</p>
+            </div>
+          ) : filteredAllServices.length === 0 ? (
+            <div className="py-16 text-center rounded-3xl bg-white/60 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/10 p-6">
+              <EmptyState
+                icon={Tag}
+                title="No services match your filters"
+                description="Try clearing your search query or selecting a different department division."
+                action={
+                  <button
+                    onClick={() => { setServicesSearchQuery(''); setServicesDeptFilter('all'); }}
+                    className="btn-secondary text-xs px-4 py-2 mt-3 mx-auto"
+                  >
+                    Reset Filters
+                  </button>
+                }
+              />
+            </div>
+          ) : servicesLayoutMode === 'grid' ? (
+            /* Cards Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+              {filteredAllServices.map(svc => {
+                const svcUsers = usersByCategory[svc.id] || [];
+                return (
+                  <div
+                    key={svc.id}
+                    className="group relative rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 p-5 flex flex-col justify-between space-y-4 shadow-sm hover:border-emerald-500/40 hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                  >
+                    {/* Top gradient accent line */}
+                    <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r from-emerald-500 to-teal-400 opacity-80" />
+
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <button
+                            onClick={() => setServicesDeptFilter(String(svc.department_id))}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-white/10 hover:bg-brand-500/10 hover:text-brand-600 text-slate-600 dark:text-slate-300 transition-colors truncate max-w-full"
+                            title={`Filter to ${svc.department_name}`}
+                          >
+                            <Building2 className="w-3 h-3 text-brand-500 flex-shrink-0" />
+                            <span className="truncate">{svc.department_name}</span>
+                          </button>
+                          <h4 className="text-base font-black text-slate-900 dark:text-white mt-1.5 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                            {svc.name}
+                          </h4>
+                        </div>
+
+                        <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 animate-pulse mt-1" title="Active Service" />
+                      </div>
+
+                      {/* Renewal badge */}
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">
+                          <FilePlus className="w-3 h-3" />
+                          {svc.renewal_count || 0} renewals
+                        </span>
+                        <span>•</span>
+                        <span>{svcUsers.length} assigned member{svcUsers.length === 1 ? '' : 's'}</span>
+                      </div>
+                    </div>
+
+                    {/* Assigned Personnel Stack */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Team Force:</span>
+                        <button
+                          onClick={() => openAddUser(svc.department_id, svc)}
+                          className="text-[10px] font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-0.5"
+                        >
+                          <Plus className="w-3 h-3" /> Assign
+                        </button>
+                      </div>
+
+                      {svcUsers.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic">No operators assigned.</p>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {svcUsers.slice(0, 4).map(u => (
+                            <div
+                              key={u.id}
+                              className="w-7 h-7 rounded-xl flex items-center justify-center font-bold text-white text-[10px] ring-2 ring-white dark:ring-slate-900 shadow-xs"
+                              style={{ background: u.avatar_color || '#10b981' }}
+                              title={`${u.full_name} (${u.email})`}
+                            >
+                              {getInitials(u.full_name)}
+                            </div>
+                          ))}
+                          {svcUsers.length > 4 && (
+                            <span className="text-[10px] font-bold text-slate-400">
+                              +{svcUsers.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Deck */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setAddRenewalFor({ departmentId: svc.department_id, categoryId: svc.id })}
+                          className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold flex items-center gap-1 px-2.5 transition-colors"
+                          title="Record Renewal"
+                        >
+                          <FilePlus className="w-3.5 h-3.5" />
+                          <span>Record</span>
+                        </button>
+                        <button
+                          onClick={() => openAddUser(svc.department_id, svc)}
+                          className="p-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20 text-[11px] font-bold flex items-center gap-1 px-2.5 transition-colors"
+                          title="Add Member"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>User</span>
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedDeptId(svc.department_id);
+                          handleSetViewMode('split');
+                          setKpiFilter('fleet');
+                        }}
+                        className="text-[11px] font-bold text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 flex items-center gap-1 transition-colors"
+                        title="Inspect in Command Console"
+                      >
+                        <span>Manage</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : servicesLayoutMode === 'lanes' ? (
+            /* Lanes View: Grouped by Department */
+            <div className="space-y-6">
+              {servicesByDeptGroup.map(({ department: dept, services: deptServices }) => (
+                <div
+                  key={dept.id}
+                  className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl p-5 sm:p-6 space-y-4"
+                >
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200/60 dark:border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-500/20 to-purple-500/20 text-brand-600 dark:text-brand-400 font-black text-sm flex items-center justify-center border border-brand-500/25">
+                        {dept.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 dark:text-white">
+                          {dept.name}
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                          {deptServices.length} service{deptServices.length === 1 ? '' : 's'} registered
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setAddServiceFor(dept.id)}
+                        className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Service</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedDeptId(dept.id);
+                          handleSetViewMode('split');
+                          setKpiFilter('fleet');
+                        }}
+                        className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+                      >
+                        <span>Open Console</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {deptServices.map(svc => {
+                      const svcUsers = usersByCategory[svc.id] || [];
+                      return (
+                        <div
+                          key={svc.id}
+                          className="rounded-2xl border border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-slate-950/40 p-4 flex flex-col justify-between space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Tag className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">{svc.name}</h4>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-semibold">{svcUsers.length} users</span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-200/40 dark:border-white/5 text-[10px]">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setAddRenewalFor({ departmentId: dept.id, categoryId: svc.id })}
+                                className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold hover:bg-emerald-500/20"
+                              >
+                                Record
+                              </button>
+                              <button
+                                onClick={() => openAddUser(dept.id, svc)}
+                                className="px-2 py-0.5 rounded bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-500/20"
+                              >
+                                User
+                              </button>
+                            </div>
+                            <span className="text-slate-400">{svc.renewal_count || 0} renewals</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Table View */
+            <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100/70 dark:bg-white/[0.03] text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/60 dark:border-white/5">
+                      <th className="py-3 px-4 w-12 text-center">#</th>
+                      <th className="py-3 px-4">Service Offering</th>
+                      <th className="py-3 px-4">Department Division</th>
+                      <th className="py-3 px-4">Assigned Personnel</th>
+                      <th className="py-3 px-4 text-center">Renewals Linked</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Quick Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {filteredAllServices.map(svc => {
+                      const svcUsers = usersByCategory[svc.id] || [];
+                      return (
+                        <tr key={svc.id} className="hover:bg-slate-50/70 dark:hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-4 text-center font-mono text-slate-400">{svc.id}</td>
+                          <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>{svc.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                              <Building2 className="w-3 h-3 text-brand-500" />
+                              {svc.department_name}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {svcUsers.length === 0 ? (
+                              <span className="text-slate-400 italic text-[11px]">Unassigned</span>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                {svcUsers.slice(0, 3).map(u => (
+                                  <div
+                                    key={u.id}
+                                    className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-white text-[9px]"
+                                    style={{ background: u.avatar_color || '#10b981' }}
+                                    title={`${u.full_name} (${u.email})`}
+                                  >
+                                    {getInitials(u.full_name)}
+                                  </div>
+                                ))}
+                                {svcUsers.length > 3 && (
+                                  <span className="text-[10px] text-slate-400">+{svcUsers.length - 3}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono font-semibold">
+                            {svc.renewal_count || 0}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Active
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setAddRenewalFor({ departmentId: svc.department_id, categoryId: svc.id })}
+                                className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-bold"
+                              >
+                                Record
+                              </button>
+                              <button
+                                onClick={() => openAddUser(svc.department_id, svc)}
+                                className="px-2 py-1 rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-500/20 text-[10px] font-bold"
+                              >
+                                User
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedDeptId(svc.department_id);
+                                  handleSetViewMode('split');
+                                  setKpiFilter('fleet');
+                                }}
+                                className="p-1 text-slate-400 hover:text-brand-600 transition-colors"
+                                title="Inspect Department"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : departments.length === 0 ? (
         <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white/75 dark:bg-slate-900/60 backdrop-blur-xl p-12 text-center shadow-sm">
           <EmptyState
             icon={Building2}
